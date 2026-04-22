@@ -1,0 +1,92 @@
+{
+  "name": "@notebook-session-labs/vscode-extension",
+  "displayName": "Notebook Session Labs",
+  "description": "A local bridge for live notebook sessions inside VS Code",
+  "version": "0.1.0",
+  "license": "MIT",
+  "publisher": "notebook-session-labs",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Notebooks", "Programming Languages", "Other"],
+  "keywords": ["notebook", "mcp", "bridge", "ai"],
+  "activationEvents": [
+    "onNotebook:*",
+    "onCommand:notebookSessionLabs.startBridge",
+    "onCommand:notebookSessionLabs.stopBridge"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "notebookSessionLabs.startBridge",
+        "title": "Notebook Session Labs: Start Bridge"
+      },
+      {
+        "command": "notebookSessionLabs.stopBridge",
+        "title": "Notebook Session Labs: Stop Bridge"
+      },
+      {
+        "command": "notebookSessionLabs.showBridgeStatus",
+        "title": "Notebook Session Labs: Show Bridge Status"
+      }
+    ],
+    "configuration": {
+      "title": "Notebook Session Labs",
+      "properties": {
+        "notebookSessionLabs.bridge.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable the local notebook bridge server"
+        },
+        "notebookSessionLabs.bridge.host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "Host address for the bridge server (loopback only recommended)"
+        },
+        "notebookSessionLabs.bridge.port": {
+          "type": "number",
+          "default": 0,
+          "description": "Port for the bridge server (0 = ephemeral)"
+        },
+        "notebookSessionLabs.bridge.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the bridge when a notebook is opened"
+        },
+        "notebookSessionLabs.logging.level": {
+          "type": "string",
+          "default": "info",
+          "enum": ["debug", "info", "warn", "error"],
+          "description": "Log level for the extension"
+        },
+        "notebookSessionLabs.output.maxSize": {
+          "type": "number",
+          "default": 100000,
+          "description": "Maximum output size in bytes per cell"
+        },
+        "notebookSessionLabs.output.includeImages": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include image outputs in cell output data"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo",
+    "package": "vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@notebook-session-labs/shared": "workspace:*",
+    "pino": "^9.6.0"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "@types/node": "^22.14.0",
+    "tsup": "^8.4.0",
+    "typescript": "^5.8.3"
+  }
+}

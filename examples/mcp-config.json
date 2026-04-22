@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "notebook-session-labs": {
+      "command": "node",
+      "args": ["packages/mcp-server/dist/index.js"],
+      "env": {
+        "NSL_BRIDGE_HOST": "127.0.0.1",
+        "NSL_BRIDGE_PORT": "SET_FROM_EXTENSION",
+        "NSL_BRIDGE_TOKEN": "SET_FROM_EXTENSION"
+      }
+    }
+  }
+}
