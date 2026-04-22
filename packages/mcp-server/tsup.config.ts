@@ -10,5 +10,5 @@ export default defineConfig({
   banner: {
     js: '#!/usr/bin/env node',
   },
-  noExternal: ["@notebook-session-labs/shared", "pino"],
+  noExternal: ["@notebook-session-labs/shared"],
 });
