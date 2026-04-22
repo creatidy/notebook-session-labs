@@ -47,7 +47,7 @@ Pushing a `v*` tag triggers both release workflows automatically.
 
 ## Automated Release Triggers
 
-Both workflows run on tag push matching `v*`:
+Both workflows run on tag push matching `v*`, **but only if the tagged commit is on `main`**. Tags pushed from other branches (e.g. `develop`, feature branches) will fail the verification step and won't publish anything.
 
 | Workflow | Artifact | Destination |
 |----------|----------|-------------|
