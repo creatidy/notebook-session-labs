@@ -1,0 +1,28 @@
+# Source and config
+src/**
+*.ts
+!dist/**
+*.map
+tsconfig.json
+tsup.config.ts
+tsconfig*.json
+
+# Dependencies
+node_modules/**
+
+# IDE and test
+.vscode/**
+.vscode-test/**
+*.tsbuildinfo
+test/**
+*.test.ts
+coverage/**
+
+# Repo files
+.gitignore
+.eslintrc.*
+.prettierrc
+.env
+.env.local
+.DS_Store
+*.log

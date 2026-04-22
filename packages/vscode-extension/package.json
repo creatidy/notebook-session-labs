@@ -1,22 +1,32 @@
 {
-  "name": "@notebook-session-labs/vscode-extension",
+  "name": "notebook-session-labs",
   "displayName": "Notebook Session Labs",
   "description": "A local bridge for live notebook sessions inside VS Code",
   "version": "0.1.0",
   "type": "module",
   "license": "MIT",
   "publisher": "notebook-session-labs",
+  "icon": "icon.png",
   "engines": {
     "vscode": "^1.90.0"
   },
   "categories": ["Notebooks", "Programming Languages", "Other"],
   "keywords": ["notebook", "mcp", "bridge", "ai"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/creatidy/notebook-session-labs.git",
+    "directory": "packages/vscode-extension"
+  },
+  "homepage": "https://github.com/creatidy/notebook-session-labs#readme",
+  "bugs": {
+    "url": "https://github.com/creatidy/notebook-session-labs/issues"
+  },
   "activationEvents": [
     "onNotebook:*",
     "onCommand:notebookSessionLabs.startBridge",
     "onCommand:notebookSessionLabs.stopBridge"
   ],
-  "main": "./dist/extension.js",
+  "main": "./dist/extension.cjs",
   "contributes": {
     "commands": [
       {
@@ -78,7 +88,9 @@
     "build": "tsup",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist *.tsbuildinfo",
-    "package": "vsce package --no-dependencies"
+    "vscode:prepublish": "pnpm build && rm -f dist/*.map",
+    "package": "vsce package --no-dependencies",
+    "publish:ext": "vsce publish --no-dependencies"
   },
   "dependencies": {
     "@notebook-session-labs/shared": "workspace:*",
@@ -87,6 +99,7 @@
   "devDependencies": {
     "@types/vscode": "^1.90.0",
     "@types/node": "^22.14.0",
+    "@vscode/vsce": "^3.3.2",
     "tsup": "^8.4.0",
     "typescript": "^5.8.3"
   }

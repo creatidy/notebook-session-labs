@@ -44,16 +44,28 @@ pnpm build
 4. The bridge starts automatically and shows the port/token in the status bar
 
 ### Run the MCP Server
-
+ 
 Set environment variables from the bridge status:
-
+ 
 ```bash
 export NSL_BRIDGE_HOST=127.0.0.1
 export NSL_BRIDGE_PORT=<port from extension>
 export NSL_BRIDGE_TOKEN=<token from extension>
-
+ 
 pnpm --filter @notebook-session-labs/mcp-server start
 ```
+
+The MCP server is also available as a Docker image:
+
+```bash
+docker run --rm \
+  -e NSL_BRIDGE_HOST=host.docker.internal \
+  -e NSL_BRIDGE_PORT=<port> \
+  -e NSL_BRIDGE_TOKEN=<token> \
+  creatidy/notebook-session-labs-mcp
+```
+
+See [llms-installation.md](llms-installation.md) for full installation options.
 
 ### Configure an MCP Client
 
@@ -151,7 +163,7 @@ See [docs/development.md](docs/development.md) for the development guide.
 - [ ] `create_notebook` and `restart_kernel` tools
 - [ ] OpenTelemetry tracing hooks
 - [ ] Configuration hot-reload
-- [ ] Extension marketplace publishing
+- [x] Extension marketplace publishing
 
 ## License
 

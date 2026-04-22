@@ -1,0 +1,56 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release-extension:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared package
+        run: pnpm --filter @notebook-session-labs/shared build
+
+      - name: Build extension
+        run: pnpm --filter notebook-session-labs build
+
+      - name: Verify required files
+        run: |
+          cd packages/vscode-extension
+          for f in README.md CHANGELOG.md LICENSE icon.png; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: Required file missing: $f"
+              exit 1
+            fi
+          done
+          echo "All required files present"
+
+      - name: Package extension
+        run: |
+          cd packages/vscode-extension
+          npx vsce package --no-dependencies
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-vsix
+          path: packages/vscode-extension/*.vsix
+
+      - name: Publish to VS Code Marketplace
+        if: success()
+        run: |
+          cd packages/vscode-extension
+          npx vsce publish --no-dependencies --pat ${{ secrets.VSCE_PAT }}

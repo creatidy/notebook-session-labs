@@ -14,7 +14,9 @@
     "typecheck": "pnpm -r run typecheck",
     "clean": "pnpm -r run clean",
     "changeset": "changeset",
-    "version": "changeset version"
+    "version": "changeset version",
+    "docker:build": "docker build -t notebook-session-labs-mcp .",
+    "docker:run": "docker run --rm -e NSL_BRIDGE_HOST -e NSL_BRIDGE_PORT -e NSL_BRIDGE_TOKEN notebook-session-labs-mcp"
   },
   "devDependencies": {
     "@changesets/cli": "^2.28.1",
