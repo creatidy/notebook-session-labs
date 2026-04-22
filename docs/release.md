@@ -11,10 +11,8 @@ The following GitHub repository secrets must be configured before automated rele
 | Secret | Purpose | How to Generate |
 |--------|---------|-----------------|
 | `VSCE_PAT` | VS Code Marketplace publishing | See below |
-| `DOCKERHUB_USERNAME` | Docker Hub authentication | Your Docker Hub username |
-| `DOCKERHUB_TOKEN` | Docker Hub access token | Docker Hub → Account Settings → Security |
 
-`GITHUB_TOKEN` is provided automatically by GitHub Actions — no configuration needed.
+`GITHUB_TOKEN` is provided automatically by GitHub Actions — no configuration needed. GHCR publishing uses `GITHUB_TOKEN` directly.
 
 ## VS Code Publisher Setup
 
@@ -26,12 +24,14 @@ The following GitHub repository secrets must be configured before automated rele
    - Set organization to **All accessible organizations**
    - Copy the token and store it as the `VSCE_PAT` GitHub secret
 
-## Docker Hub Setup
+## GHCR Package Visibility
 
-1. Create a Docker Hub account (if not existing)
-2. Create a repository named `notebook-session-labs-mcp` under the `creatidy` organization
-3. Generate an access token: Docker Hub → Account Settings → Security → New Access Token
-4. Store the username as `DOCKERHUB_USERNAME` and the token as `DOCKERHUB_TOKEN` in GitHub secrets
+After the first Docker image publish, the package may default to private. To make it publicly accessible:
+
+1. Go to `https://github.com/creatidy?tab=packages`
+2. Find the `notebook-session-labs` package
+3. Go to **Package settings** → **Danger Zone** → **Change package visibility**
+4. Set to **Public**
 
 ## Release Steps
 
@@ -52,15 +52,17 @@ Both workflows run on tag push matching `v*`:
 | Workflow | Artifact | Destination |
 |----------|----------|-------------|
 | `release-extension.yml` | `.vsix` | VS Code Marketplace + GitHub artifact |
-| `release-docker.yml` | Docker image | Docker Hub + GHCR |
+| `release-docker.yml` | Docker image | GHCR (`ghcr.io/creatidy/notebook-session-labs-mcp`) |
 
-Docker image tags generated:
-- `v0.1.0` → `0.1.0`, `0.1`
-- `latest` tag is applied to releases from the default branch
+Docker image tags generated from a `v0.1.0` tag:
+- `0.1.0`
+- `0.1`
+- Short git SHA
+- `latest` (for releases from the default branch)
 
 ## Manual Dry Run
 
-Before trusting automation, do a manual dry run:
+Before trusting automation, do a manual dry run.
 
 ### Package extension locally
 
@@ -87,7 +89,7 @@ npx vsce publish --no-dependencies --pat <YOUR_PAT>
 ### Build Docker image locally
 
 ```bash
-docker build -t notebook-session-labs-mcp .
+docker build -t ghcr.io/creatidy/notebook-session-labs-mcp:local .
 ```
 
 ### Test Docker image locally
@@ -97,17 +99,25 @@ docker run --rm \
   -e NSL_BRIDGE_HOST=host.docker.internal \
   -e NSL_BRIDGE_PORT=<port> \
   -e NSL_BRIDGE_TOKEN=<token> \
-  notebook-session-labs-mcp
+  ghcr.io/creatidy/notebook-session-labs-mcp:local
 ```
 
-### Push Docker image manually
+### Push Docker image manually to GHCR
 
 ```bash
-docker tag notebook-session-labs-mcp creatidy/notebook-session-labs-mcp:0.1.0
-docker tag notebook-session-labs-mcp creatidy/notebook-session-labs-mcp:latest
-docker push creatidy/notebook-session-labs-mcp:0.1.0
-docker push creatidy/notebook-session-labs-mcp:latest
+# Log in to GHCR
+echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <USERNAME> --password-stdin
+
+# Tag
+docker tag ghcr.io/creatidy/notebook-session-labs-mcp:local ghcr.io/creatidy/notebook-session-labs-mcp:0.1.0
+docker tag ghcr.io/creatidy/notebook-session-labs-mcp:local ghcr.io/creatidy/notebook-session-labs-mcp:latest
+
+# Push
+docker push ghcr.io/creatidy/notebook-session-labs-mcp:0.1.0
+docker push ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
+
+Use a GitHub Personal Access Token with `write:packages` scope for manual pushes.
 
 ## CI
 
@@ -119,3 +129,4 @@ The GitHub Actions CI workflow handles build verification on every push to `main
 - The git tag version (`v0.1.0`) should match the extension version
 - Docker image versioning is derived from the git tag via `docker/metadata-action`
 - The `@vscode/vsce` tool is available via `npx` in the extension package
+- GHCR is the only supported public container registry

@@ -39,14 +39,12 @@ docker run --rm \
   -e NSL_BRIDGE_HOST=host.docker.internal \
   -e NSL_BRIDGE_PORT=<port> \
   -e NSL_BRIDGE_TOKEN=<token> \
-  creatidy/notebook-session-labs-mcp
+  ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
 
 When using Docker, set `NSL_BRIDGE_HOST` to `host.docker.internal` (or the Docker host IP) so the container can reach the VS Code bridge on the host.
 
-The Docker image is published to:
-- Docker Hub: `creatidy/notebook-session-labs-mcp`
-- GHCR: `ghcr.io/creatidy/notebook-session-labs-mcp`
+The Docker image is published to GHCR: `ghcr.io/creatidy/notebook-session-labs-mcp`.
 
 ## Option 3: Configure an MCP Client
 
@@ -82,7 +80,7 @@ Add to your MCP server configuration:
         "-e", "NSL_BRIDGE_HOST",
         "-e", "NSL_BRIDGE_PORT",
         "-e", "NSL_BRIDGE_TOKEN",
-        "creatidy/notebook-session-labs-mcp"
+        "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
       ],
       "env": {
         "NSL_BRIDGE_HOST": "host.docker.internal",

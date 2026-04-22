@@ -55,14 +55,14 @@ export NSL_BRIDGE_TOKEN=<token from extension>
 pnpm --filter @notebook-session-labs/mcp-server start
 ```
 
-The MCP server is also available as a Docker image:
+The MCP server is also available as a Docker image from GHCR:
 
 ```bash
 docker run --rm \
   -e NSL_BRIDGE_HOST=host.docker.internal \
   -e NSL_BRIDGE_PORT=<port> \
   -e NSL_BRIDGE_TOKEN=<token> \
-  creatidy/notebook-session-labs-mcp
+  ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
 
 See [llms-installation.md](llms-installation.md) for full installation options.
