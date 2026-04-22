@@ -3,6 +3,7 @@
   "displayName": "Notebook Session Labs",
   "description": "A local bridge for live notebook sessions inside VS Code",
   "version": "0.1.0",
+  "type": "module",
   "license": "MIT",
   "publisher": "notebook-session-labs",
   "engines": {

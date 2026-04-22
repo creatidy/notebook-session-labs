@@ -8,5 +8,5 @@ export default defineConfig({
   },
   clean: true,
   sourcemap: true,
-  tsconfig: "./tsconfig.json",
+  tsconfig: "./tsconfig.build.json",
 });

@@ -41,21 +41,20 @@ function cellId(cell: vscode.NotebookCell): string {
 }
 
 /**
- * Map VS Code NotebookCellExecutionState to our execution status.
+ * Map a cell's execution summary to our execution status.
+ * Note: VS Code removed NotebookCellExecutionState in API v1.90+.
+ * We infer status from the cell's executionSummary instead.
  */
-function mapExecutionState(
-  state: vscode.NotebookCellExecutionState,
+function inferExecutionStatus(
+  cell: vscode.NotebookCell,
 ): CellExecutionStatus {
-  switch (state) {
-    case vscode.NotebookCellExecutionState.Idle:
-      return "idle";
-    case vscode.NotebookCellExecutionState.Pending:
-      return "pending";
-    case vscode.NotebookCellExecutionState.Executing:
-      return "executing";
-    default:
-      return "idle";
+  if (cell.executionSummary?.success === false) {
+    return "failed";
   }
+  if (cell.executionSummary?.executionOrder !== undefined) {
+    return "idle";
+  }
+  return "idle";
 }
 
 /**
@@ -75,7 +74,10 @@ function convertOutput(
     outputKind = metadata.outputType as CellOutput["outputKind"];
   }
 
-  for (const item of output.items) {
+  // Cast output items - in newer VS Code API, items is NotebookCellOutputItem[]
+  const outputItems = output.items as vscode.NotebookCellOutputItem[];
+
+  for (const item of outputItems) {
     const mime = item.mime;
 
     // Skip image outputs if configured
@@ -96,7 +98,7 @@ function convertOutput(
       mime === "text/html" ||
       mime === "application/json"
     ) {
-      const text = item.data.toString("utf-8");
+      const text = Buffer.from(item.data).toString("utf-8");
       const truncated = text.length > maxOutputSize;
       const data = truncated
         ? text.slice(0, maxOutputSize) + TRUNCATION_MARKER
@@ -109,7 +111,7 @@ function convertOutput(
       });
     } else if (mime === "image/png" || mime === "image/jpeg") {
       // Base64 encode image data
-      const base64 = item.data.toString("base64");
+      const base64 = Buffer.from(item.data).toString("base64");
       const truncated = base64.length > maxOutputSize;
       const data = truncated
         ? base64.slice(0, maxOutputSize) + TRUNCATION_MARKER
@@ -137,7 +139,7 @@ function convertOutput(
   }
 
   return {
-    id: output.id || crypto.randomUUID(),
+    id: crypto.randomUUID(),
     outputKind,
     items,
     metadata: output.metadata as Record<string, unknown> ?? {},
@@ -156,7 +158,7 @@ export function getActiveNotebook(): vscode.NotebookDocument | undefined {
 /**
  * List all open notebook documents.
  */
-export function listOpenNotebooks(): vscode.NotebookDocument[] {
+export function listOpenNotebooks(): readonly vscode.NotebookDocument[] {
   return vscode.workspace.notebookDocuments;
 }
 
@@ -229,13 +231,7 @@ export function getCellSummary(
       cell.kind === vscode.NotebookCellKind.Code
         ? (cell.executionSummary?.executionOrder ?? null)
         : null,
-    executionStatus: mapExecutionState(
-      cell.executionSummary?.success !== undefined
-        ? cell.executionSummary.success
-          ? vscode.NotebookCellExecutionState.Idle
-          : vscode.NotebookCellExecutionState.Idle
-        : vscode.NotebookCellExecutionState.Idle,
-    ),
+    executionStatus: inferExecutionStatus(cell),
     hasOutput: cell.outputs.length > 0,
   };
 }
@@ -369,10 +365,9 @@ export async function insertCell(
   const newCell = new vscode.NotebookCellData(cellKind, source, cellLanguage);
   newCell.metadata = {};
 
-  wsEdit.replaceNotebookCells(
+  wsEdit.set(
     doc.uri,
-    new vscode.NotebookRange(index, index),
-    [newCell],
+    [vscode.NotebookEdit.insertCells(index, [newCell])],
   );
 
   await vscode.workspace.applyEdit(wsEdit);
@@ -411,10 +406,12 @@ export async function replaceCell(
   const newCell = new vscode.NotebookCellData(cellKind, source, cellLanguage);
   newCell.metadata = existingCell.metadata as Record<string, unknown> ?? {};
 
-  wsEdit.replaceNotebookCells(
+  wsEdit.set(
     doc.uri,
-    new vscode.NotebookRange(cellIndex, cellIndex + 1),
-    [newCell],
+    [vscode.NotebookEdit.replaceCells(
+      new vscode.NotebookRange(cellIndex, cellIndex + 1),
+      [newCell],
+    )],
   );
 
   await vscode.workspace.applyEdit(wsEdit);
@@ -459,10 +456,11 @@ export async function deleteCell(
   }
 
   const wsEdit = new vscode.WorkspaceEdit();
-  wsEdit.replaceNotebookCells(
+  wsEdit.set(
     doc.uri,
-    new vscode.NotebookRange(cellIndex, cellIndex + 1),
-    [],
+    [vscode.NotebookEdit.deleteCells(
+      new vscode.NotebookRange(cellIndex, cellIndex + 1),
+    )],
   );
   await vscode.workspace.applyEdit(wsEdit);
 }
@@ -496,18 +494,18 @@ export async function moveCell(
   const wsEdit = new vscode.WorkspaceEdit();
 
   // Remove from old position
-  wsEdit.replaceNotebookCells(
+  wsEdit.set(
     doc.uri,
-    new vscode.NotebookRange(fromIndex, fromIndex + 1),
-    [],
+    [vscode.NotebookEdit.deleteCells(
+      new vscode.NotebookRange(fromIndex, fromIndex + 1),
+    )],
   );
 
   // Insert at new position (adjust for removal shift)
   const adjustedIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
-  wsEdit.replaceNotebookCells(
+  wsEdit.set(
     doc.uri,
-    new vscode.NotebookRange(adjustedIndex, adjustedIndex),
-    [cellData],
+    [vscode.NotebookEdit.insertCells(adjustedIndex, [cellData])],
   );
 
   await vscode.workspace.applyEdit(wsEdit);
