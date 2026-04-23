@@ -40,7 +40,7 @@ function notebookId(doc: vscode.NotebookDocument): string {
  * Uses SHA-256 hash of the cell URI to guarantee uniqueness
  * even when cell URIs share long common prefixes.
  */
-function cellId(cell: vscode.NotebookCell): string {
+export function cellId(cell: vscode.NotebookCell): string {
   return createHash("sha256").update(cell.document.uri.toString()).digest("hex").slice(0, 32);
 }
 
@@ -173,15 +173,20 @@ function convertOutput(
       const rawText = Buffer.from(item.data).toString("utf-8");
       let errorText = rawText;
 
-      // Try to parse structured error from data (JSON with ename/evalue/traceback)
+      // Try to parse structured error from data.
+      // VS Code error MIME may use Jupyter convention (ename/evalue/traceback)
+      // or JavaScript convention (name/message/stack).
       try {
         const parsed = JSON.parse(rawText);
-        if (parsed.ename || parsed.evalue) {
+        const errorName = parsed.ename ?? parsed.name;
+        const errorMsg = parsed.evalue ?? parsed.message;
+        if (errorName || errorMsg) {
+          const trace = parsed.traceback
+            ? (Array.isArray(parsed.traceback) ? parsed.traceback.join("\n") : String(parsed.traceback))
+            : (parsed.stack ? String(parsed.stack) : "");
           errorText = [
-            parsed.traceback
-              ? (Array.isArray(parsed.traceback) ? parsed.traceback.join("\n") : String(parsed.traceback))
-              : "",
-            `${parsed.ename ?? "Error"}: ${parsed.evalue ?? ""}`,
+            trace,
+            `${errorName ?? "Error"}: ${errorMsg ?? ""}`,
           ].filter(Boolean).join("\n");
         }
       } catch {

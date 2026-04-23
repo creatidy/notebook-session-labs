@@ -249,7 +249,7 @@ function handleReadCellOutput(
   const cell = doc.cellAt(cellIndex);
   return {
     cellIndex,
-    cellId: cell.document.uri.toString(),
+    cellId: notebookService.cellId(cell),
     outputs: notebookService.getCellOutputs(cell, maxOutputSize, includeImages),
   };
 }
