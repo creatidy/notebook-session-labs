@@ -69,6 +69,8 @@ export const BRIDGE_METHODS = {
   EDIT_CELL_SOURCE: "edit_cell_source",
   DELETE_CELL: "delete_cell",
   MOVE_CELL: "move_cell",
+  CLEAR_CELL_OUTPUTS: "clear_cell_outputs",
+  CLEAR_ALL_OUTPUTS: "clear_all_outputs",
 
   // Execution
   EXECUTE_CELL: "execute_cell",

@@ -211,6 +211,15 @@ export const SaveNotebookParamsSchema = z.object({
   notebookId: NotebookIdSchema.optional(),
 });
 
+export const ClearCellOutputsParamsSchema = z.object({
+  cellIndex: z.number().int().nonnegative(),
+  notebookId: NotebookIdSchema.optional(),
+});
+
+export const ClearAllOutputsParamsSchema = z.object({
+  notebookId: NotebookIdSchema.optional(),
+});
+
 // ── Health check response ──
 
 export const HealthCheckResponseSchema = z.object({

@@ -117,6 +117,12 @@ async function dispatch(
     case BRIDGE_METHODS.MOVE_CELL:
       return handleMoveCell(params);
 
+    case BRIDGE_METHODS.CLEAR_CELL_OUTPUTS:
+      return handleClearCellOutputs(params);
+
+    case BRIDGE_METHODS.CLEAR_ALL_OUTPUTS:
+      return handleClearAllOutputs(params);
+
     // ── Execution ──
     case BRIDGE_METHODS.EXECUTE_CELL:
       return handleExecuteCell(params);
@@ -420,6 +426,37 @@ async function handleSaveNotebook(params: Record<string, unknown>) {
   }
   const saved = await notebookService.saveNotebook(doc);
   return { success: saved };
+}
+
+async function handleClearCellOutputs(params: Record<string, unknown>) {
+  const notebookId = params.notebookId as string | undefined;
+  const cellIndex = params.cellIndex as number;
+
+  const doc = notebookService.resolveNotebook(notebookId);
+  if (!doc) {
+    throw new BridgeHandlerError(
+      ErrorCode.NOTEBOOK_NOT_FOUND,
+      notebookId
+        ? `Notebook not found: ${notebookId}`
+        : "No active notebook",
+    );
+  }
+  return notebookService.clearCellOutputs(doc, cellIndex);
+}
+
+async function handleClearAllOutputs(params: Record<string, unknown>) {
+  const notebookId = params.notebookId as string | undefined;
+
+  const doc = notebookService.resolveNotebook(notebookId);
+  if (!doc) {
+    throw new BridgeHandlerError(
+      ErrorCode.NOTEBOOK_NOT_FOUND,
+      notebookId
+        ? `Notebook not found: ${notebookId}`
+        : "No active notebook",
+    );
+  }
+  return notebookService.clearAllOutputs(doc);
 }
 
 // ── Error class ──

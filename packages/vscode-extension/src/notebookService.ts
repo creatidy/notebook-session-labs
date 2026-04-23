@@ -471,8 +471,10 @@ export async function replaceCell(
       : vscode.NotebookCellKind.Markup
     : existingCell.kind;
 
+  const isKindChange = kind !== undefined &&
+    ((kind === "code") !== (existingCell.kind === vscode.NotebookCellKind.Code));
   const cellLanguage = cellKind === vscode.NotebookCellKind.Code
-    ? (language || existingCell.document.languageId)
+    ? (language || (isKindChange ? getDefaultKernelLanguage(doc) : existingCell.document.languageId))
     : "markdown";
 
   const wsEdit = new vscode.WorkspaceEdit();
@@ -539,6 +541,78 @@ export async function deleteCell(
 }
 
 /**
+ * Clear outputs for a specific cell.
+ */
+export async function clearCellOutputs(
+  doc: vscode.NotebookDocument,
+  cellIndex: number,
+): Promise<CellDetail> {
+  if (cellIndex < 0 || cellIndex >= doc.cellCount) {
+    throw new Error(`Cell index ${cellIndex} out of range`);
+  }
+
+  const cell = doc.cellAt(cellIndex);
+  if (cell.outputs.length === 0) {
+    return getCellDetail(cell, cellIndex);
+  }
+
+  const cellData = new vscode.NotebookCellData(
+    cell.kind,
+    cell.document.getText(),
+    cell.document.languageId,
+  );
+  cellData.metadata = cell.metadata as Record<string, unknown> ?? {};
+  // No outputs — cleared
+
+  const wsEdit = new vscode.WorkspaceEdit();
+  wsEdit.set(
+    doc.uri,
+    [vscode.NotebookEdit.replaceCells(
+      new vscode.NotebookRange(cellIndex, cellIndex + 1),
+      [cellData],
+    )],
+  );
+  await vscode.workspace.applyEdit(wsEdit);
+
+  return getCellDetail(doc.cellAt(cellIndex), cellIndex);
+}
+
+/**
+ * Clear outputs for all cells in a notebook.
+ */
+export async function clearAllOutputs(
+  doc: vscode.NotebookDocument,
+): Promise<{ clearedCells: number }> {
+  let clearedCells = 0;
+
+  for (let i = 0; i < doc.cellCount; i++) {
+    const cell = doc.cellAt(i);
+    if (cell.outputs.length > 0) {
+      const cellData = new vscode.NotebookCellData(
+        cell.kind,
+        cell.document.getText(),
+        cell.document.languageId,
+      );
+      cellData.metadata = cell.metadata as Record<string, unknown> ?? {};
+
+      const wsEdit = new vscode.WorkspaceEdit();
+      wsEdit.set(
+        doc.uri,
+        [vscode.NotebookEdit.replaceCells(
+          new vscode.NotebookRange(i, i + 1),
+          [cellData],
+        )],
+      );
+      // eslint-disable-next-line no-await-in-loop
+      await vscode.workspace.applyEdit(wsEdit);
+      clearedCells++;
+    }
+  }
+
+  return { clearedCells };
+}
+
+/**
  * Move a cell from one position to another.
  */
 export async function moveCell(
@@ -553,6 +627,11 @@ export async function moveCell(
     throw new Error(`Target cell index ${toIndex} out of range`);
   }
 
+  // No-op if same index
+  if (fromIndex === toIndex) {
+    return getCellDetail(doc.cellAt(fromIndex), fromIndex);
+  }
+
   const cell = doc.cellAt(fromIndex);
   const cellData = new vscode.NotebookCellData(
     cell.kind,
@@ -564,27 +643,27 @@ export async function moveCell(
     (o) => new vscode.NotebookCellOutput(o.items),
   );
 
-  const wsEdit = new vscode.WorkspaceEdit();
-
-  // Remove from old position
-  wsEdit.set(
+  // Step 1: Remove from old position
+  const deleteEdit = new vscode.WorkspaceEdit();
+  deleteEdit.set(
     doc.uri,
     [vscode.NotebookEdit.deleteCells(
       new vscode.NotebookRange(fromIndex, fromIndex + 1),
     )],
   );
+  await vscode.workspace.applyEdit(deleteEdit);
 
-  // Insert at new position (adjust for removal shift)
-  const adjustedIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
-  wsEdit.set(
+  // Step 2: Insert at new position (after deletion shifted indices)
+  const insertIndex = fromIndex < toIndex ? toIndex - 1 : toIndex;
+  const insertEdit = new vscode.WorkspaceEdit();
+  insertEdit.set(
     doc.uri,
-    [vscode.NotebookEdit.insertCells(adjustedIndex, [cellData])],
+    [vscode.NotebookEdit.insertCells(insertIndex, [cellData])],
   );
+  await vscode.workspace.applyEdit(insertEdit);
 
-  await vscode.workspace.applyEdit(wsEdit);
-
-  const movedCell = doc.cellAt(adjustedIndex);
-  return getCellDetail(movedCell, adjustedIndex);
+  const movedCell = doc.cellAt(insertIndex);
+  return getCellDetail(movedCell, insertIndex);
 }
 
 /**

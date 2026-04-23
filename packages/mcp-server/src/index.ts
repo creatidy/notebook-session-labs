@@ -203,6 +203,19 @@ server.tool("cancel_execution", "Cancel the current notebook execution", {
   return textResult(await bridge("CANCEL_EXECUTION", { notebookId }));
 });
 
+server.tool("clear_cell_outputs", "Clear outputs for a specific cell", {
+  cellIndex: CellIndexParam.describe("Zero-based index of the cell"),
+  notebookId: NotebookIdParam,
+}, async ({ cellIndex, notebookId }) => {
+  return textResult(await bridge("CLEAR_CELL_OUTPUTS", { cellIndex, notebookId }));
+});
+
+server.tool("clear_all_outputs", "Clear outputs for all cells in the notebook", {
+  notebookId: NotebookIdParam,
+}, async ({ notebookId }) => {
+  return textResult(await bridge("CLEAR_ALL_OUTPUTS", { notebookId }));
+});
+
 // ── Utility Tools ──
 
 server.tool("save_notebook", "Save the active or specified notebook", {
