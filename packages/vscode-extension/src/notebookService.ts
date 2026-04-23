@@ -6,6 +6,7 @@
  * touch VS Code APIs directly.
  */
 import * as vscode from "vscode";
+import { createHash } from "crypto";
 import { getLogger } from "./utils/logger.js";
 import type {
   NotebookSummary,
@@ -28,16 +29,19 @@ const log = getLogger();
 
 /**
  * Generate a stable ID for a notebook document.
+ * Uses SHA-256 hash of the URI to avoid collisions from shared prefixes.
  */
 function notebookId(doc: vscode.NotebookDocument): string {
-  return Buffer.from(doc.uri.toString()).toString("base64url").slice(0, 64);
+  return createHash("sha256").update(doc.uri.toString()).digest("hex").slice(0, 32);
 }
 
 /**
  * Generate a stable ID for a cell.
+ * Uses SHA-256 hash of the cell URI to guarantee uniqueness
+ * even when cell URIs share long common prefixes.
  */
 function cellId(cell: vscode.NotebookCell): string {
-  return Buffer.from(cell.document.uri.toString()).toString("base64url").slice(0, 64);
+  return createHash("sha256").update(cell.document.uri.toString()).digest("hex").slice(0, 32);
 }
 
 /**
