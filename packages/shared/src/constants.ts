@@ -46,6 +46,10 @@ export const SUPPORTED_OUTPUT_MIMES = [
   "image/png",
   "image/jpeg",
   "text/html",
+  // VS Code internal MIME types (decoded as text/plain by the extension)
+  "application/vnd.code.notebook.stdout",
+  "application/vnd.code.notebook.stderr",
+  "application/vnd.code.notebook.error",
 ] as const;
 
 /** Bridge method names */

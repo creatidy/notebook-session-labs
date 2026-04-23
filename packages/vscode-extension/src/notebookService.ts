@@ -30,14 +30,14 @@ const log = getLogger();
  * Generate a stable ID for a notebook document.
  */
 function notebookId(doc: vscode.NotebookDocument): string {
-  return Buffer.from(doc.uri.toString()).toString("base64url").slice(0, 32);
+  return Buffer.from(doc.uri.toString()).toString("base64url").slice(0, 64);
 }
 
 /**
  * Generate a stable ID for a cell.
  */
 function cellId(cell: vscode.NotebookCell): string {
-  return Buffer.from(cell.document.uri.toString()).toString("base64url").slice(0, 16);
+  return Buffer.from(cell.document.uri.toString()).toString("base64url").slice(0, 64);
 }
 
 /**
@@ -55,6 +55,35 @@ function inferExecutionStatus(
     return "idle";
   }
   return "idle";
+}
+
+/**
+ * VS Code internal MIME types for notebook cell outputs.
+ * These are used by VS Code to represent stdout, stderr, and error streams
+ * but are not standard Jupyter MIME types.
+ */
+const VSCODE_INTERNAL_STREAM_MIMES = new Set([
+  "application/vnd.code.notebook.stdout",
+  "application/vnd.code.notebook.stderr",
+]);
+
+const VSCODE_INTERNAL_ERROR_MIME = "application/vnd.code.notebook.error";
+
+/**
+ * Detect kernel status for a notebook.
+ * Checks execution history to infer if a kernel is available.
+ */
+function getKernelStatus(
+  doc: vscode.NotebookDocument,
+): "idle" | "busy" | "unknown" {
+  for (let i = 0; i < doc.cellCount; i++) {
+    const cell = doc.cellAt(i);
+    if (cell.executionSummary?.executionOrder !== undefined) {
+      // At least one cell has been executed, so a kernel was available
+      return "idle";
+    }
+  }
+  return "unknown";
 }
 
 /**
@@ -122,6 +151,49 @@ function convertOutput(
         truncated,
         originalSize: base64.length,
       });
+    } else if (VSCODE_INTERNAL_STREAM_MIMES.has(mime)) {
+      // VS Code internal stdout/stderr MIME types — decode as text
+      const text = Buffer.from(item.data).toString("utf-8");
+      const truncated = text.length > maxOutputSize;
+      const data = truncated
+        ? text.slice(0, maxOutputSize) + TRUNCATION_MARKER
+        : text;
+      items.push({
+        mime: "text/plain",
+        data,
+        truncated,
+        originalSize: text.length,
+      });
+    } else if (mime === VSCODE_INTERNAL_ERROR_MIME) {
+      // VS Code internal error MIME type — decode error output
+      const rawText = Buffer.from(item.data).toString("utf-8");
+      let errorText = rawText;
+
+      // Try to parse structured error from data (JSON with ename/evalue/traceback)
+      try {
+        const parsed = JSON.parse(rawText);
+        if (parsed.ename || parsed.evalue) {
+          errorText = [
+            parsed.traceback
+              ? (Array.isArray(parsed.traceback) ? parsed.traceback.join("\n") : String(parsed.traceback))
+              : "",
+            `${parsed.ename ?? "Error"}: ${parsed.evalue ?? ""}`,
+          ].filter(Boolean).join("\n");
+        }
+      } catch {
+        // Not JSON — use raw text as-is
+      }
+
+      const truncated = errorText.length > maxOutputSize;
+      const data = truncated
+        ? errorText.slice(0, maxOutputSize) + TRUNCATION_MARKER
+        : errorText;
+      items.push({
+        mime: "text/plain",
+        data,
+        truncated,
+        originalSize: errorText.length,
+      });
     } else {
       // Unknown mime type - include as metadata only
       items.push({
@@ -171,7 +243,7 @@ export function getNotebookSummary(doc: vscode.NotebookDocument): NotebookSummar
     uri: doc.uri.toString(),
     fileName: doc.uri.path.split("/").pop() || "untitled",
     cellCount: doc.cellCount,
-    kernelStatus: "unknown", // Will be populated when kernel info is available
+    kernelStatus: getKernelStatus(doc),
     isDirty: doc.isDirty,
   };
 }
@@ -188,16 +260,8 @@ export async function getNotebookDetail(
     getCellSummary(cell, index),
   );
 
-  const kernelStatus = "unknown";
-  let kernelDisplayName = "unknown";
-
-  // Attempt to get kernel info
-  try {
-    const kernel = doc.notebookType;
-    kernelDisplayName = kernel || "unknown";
-  } catch {
-    // Kernel info not available
-  }
+  const kernelStatus = getKernelStatus(doc);
+  const kernelDisplayName = doc.notebookType || "unknown";
 
   return {
     id: notebookId(doc),
@@ -529,6 +593,7 @@ export async function executeCell(
 
   const cell = doc.cellAt(cellIndex);
   const startTime = Date.now();
+  const previousExecutionOrder = cell.executionSummary?.executionOrder;
 
   log.info({ cellIndex, notebookId: notebookId(doc) }, "Executing cell");
 
@@ -549,6 +614,7 @@ export async function executeCell(
         doc,
         cellIndex,
         startTime,
+        previousExecutionOrder,
         timeout,
       );
       return result;
@@ -578,31 +644,83 @@ export async function executeCell(
 }
 
 /**
- * Run all cells in a notebook.
+ * Run all cells in a notebook and wait for completion.
  */
 export async function runAllCells(
   doc: vscode.NotebookDocument,
-  _timeoutMs?: number,
+  timeoutMs?: number,
 ): Promise<ExecutionResult[]> {
   log.info({ notebookId: notebookId(doc) }, "Running all cells");
+
+  // Record previous execution orders for all code cells
+  const codeCellIndices: number[] = [];
+  const previousOrders = new Map<number, number | undefined>();
+  for (let i = 0; i < doc.cellCount; i++) {
+    const cell = doc.cellAt(i);
+    if (cell.kind === vscode.NotebookCellKind.Code) {
+      codeCellIndices.push(i);
+      previousOrders.set(i, cell.executionSummary?.executionOrder);
+    }
+  }
+
+  if (codeCellIndices.length === 0) {
+    return [];
+  }
+
+  const startTime = Date.now();
+  const timeout = timeoutMs || 120_000; // Default 2 min for all cells
 
   await vscode.commands.executeCommand(
     "notebook.execute",
     doc.uri,
   );
 
-  // Return pending results for all code cells
+  // Poll for completion of all code cells
+  const deadline = startTime + timeout;
+  const pollInterval = 500;
+  const completed = new Set<number>();
+
+  while (Date.now() < deadline && completed.size < codeCellIndices.length) {
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+
+    for (const idx of codeCellIndices) {
+      if (completed.has(idx)) continue;
+      const cell = doc.cellAt(idx);
+      const currentOrder = cell.executionSummary?.executionOrder;
+      const previousOrder = previousOrders.get(idx);
+      if (currentOrder !== undefined && currentOrder !== previousOrder) {
+        completed.add(idx);
+      }
+    }
+  }
+
+  // Build results for all code cells
   const results: ExecutionResult[] = [];
-  for (let i = 0; i < doc.cellCount; i++) {
-    const cell = doc.cellAt(i);
-    if (cell.kind === vscode.NotebookCellKind.Code) {
+  for (const idx of codeCellIndices) {
+    const cell = doc.cellAt(idx);
+    const currentOrder = cell.executionSummary?.executionOrder;
+    const previousOrder = previousOrders.get(idx);
+    const didComplete = completed.has(idx);
+
+    if (didComplete) {
+      const outputs = getCellOutputs(cell);
+      const hasError = cell.executionSummary?.success === false;
+      results.push({
+        cellId: cellId(cell),
+        status: hasError ? "failed" : "succeeded",
+        executionCount: currentOrder ?? null,
+        outputs,
+        durationMs: Date.now() - startTime,
+        error: hasError ? extractErrorMessage(outputs) : null,
+      });
+    } else {
       results.push({
         cellId: cellId(cell),
         status: "pending",
         executionCount: null,
         outputs: [],
-        durationMs: null,
-        error: null,
+        durationMs: Date.now() - startTime,
+        error: "Execution timed out or did not complete",
       });
     }
   }
@@ -642,18 +760,24 @@ async function waitForCellCompletion(
   doc: vscode.NotebookDocument,
   cellIndex: number,
   startTime: number,
+  previousExecutionOrder: number | undefined,
   timeoutMs: number,
 ): Promise<ExecutionResult> {
   const cell = doc.cellAt(cellIndex);
   const deadline = startTime + timeoutMs;
   const pollInterval = 500;
+  const kernelGracePeriod = 3_000; // Wait 3s to detect if kernel starts
+  const kernelCheckTime = startTime + kernelGracePeriod;
+  let kernelCheckDone = false;
 
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
-    // Check if the cell has completed execution
     const currentCell = doc.cellAt(cellIndex);
-    if (currentCell.executionSummary?.executionOrder !== undefined) {
+    const currentExecutionOrder = currentCell.executionSummary?.executionOrder;
+
+    // Check if execution completed (execution order changed from previous)
+    if (currentExecutionOrder !== undefined && currentExecutionOrder !== previousExecutionOrder) {
       const outputs = getCellOutputs(currentCell);
       const hasError = currentCell.executionSummary.success === false;
       const durationMs = Date.now() - startTime;
@@ -661,13 +785,29 @@ async function waitForCellCompletion(
       return {
         cellId: cellId(currentCell),
         status: hasError ? "failed" : "succeeded",
-        executionCount: currentCell.executionSummary.executionOrder ?? null,
+        executionCount: currentExecutionOrder ?? null,
         outputs,
         durationMs,
         error: hasError
           ? extractErrorMessage(outputs)
           : null,
       };
+    }
+
+    // After grace period, check if kernel started the execution at all
+    if (!kernelCheckDone && Date.now() >= kernelCheckTime) {
+      kernelCheckDone = true;
+      if (currentExecutionOrder === previousExecutionOrder) {
+        // Execution order hasn't changed — kernel likely not available
+        return {
+          cellId: cellId(cell),
+          status: "failed",
+          executionCount: null,
+          outputs: [],
+          durationMs: Date.now() - startTime,
+          error: "Kernel not available or execution did not start. Ensure a notebook kernel is selected.",
+        };
+      }
     }
   }
 

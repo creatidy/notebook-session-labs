@@ -7,6 +7,14 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageVersion: string = JSON.parse(
+  readFileSync(join(__dirname, "..", "package.json"), "utf-8"),
+).version;
 import {
   BRIDGE_METHODS,
   DEFAULT_REQUEST_TIMEOUT_MS,
@@ -58,7 +66,7 @@ const logger: Logger = pino({
 
 const server = new McpServer({
   name: "notebook-session-labs",
-  version: "0.1.0",
+  version: packageVersion,
 });
 
 // Helper to call the bridge with config
