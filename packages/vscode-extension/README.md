@@ -38,6 +38,45 @@ code --install-extension notebook-session-labs-0.1.0.vsix
 | `notebookSessionLabs.output.maxSize` | `100000` | Max output size per cell (bytes) |
 | `notebookSessionLabs.output.includeImages` | `true` | Include image outputs |
 
+## MCP Client Configuration
+
+### Node.js (local)
+
+```json
+{
+  "servers": {
+    "notebook-session-labs": {
+      "command": "node",
+      "args": ["/path/to/notebook-session-labs/packages/mcp-server/dist/index.js"],
+      "env": {
+        "NSL_BRIDGE_HOST": "127.0.0.1",
+        "NSL_BRIDGE_PORT": "<port from status bar>"
+      }
+    }
+  }
+}
+```
+
+### Docker
+
+```json
+{
+  "servers": {
+    "notebook-session-labs": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm", "--network=host",
+        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
+        "-e", "NSL_BRIDGE_PORT=3939",
+        "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+See [llms-installation.md](../../llms-installation.md) for full configuration options including token auth.
+
 ## Architecture
 
 ```
@@ -46,7 +85,7 @@ MCP Client <--stdio--> MCP Server <--HTTP--> VS Code Extension Bridge <--API--> 
 
 The extension is the source of truth for notebook access. It uses loopback-only binding with optional token authentication.
 
-See the [root README](README.md) and [architecture docs](docs/architecture.md) for details.
+See the [root README](../../README.md) and [architecture docs](../../docs/architecture.md) for details.
 
 ## Requirements
 

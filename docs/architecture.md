@@ -99,3 +99,16 @@ The local bridge uses **loopback HTTP** rather than IPC or named pipes. This dec
 3. Optional bearer token auth is available for users who want stricter local hardening
 4. No platform-specific IPC configuration needed
 5. Easy to test with standard HTTP tools (curl, etc.)
+
+## Docker Networking
+
+When running the MCP server in Docker, the container needs to reach the VS Code bridge on the host. Use `--network=host` to share the host's network stack directly:
+
+```bash
+docker run -i --rm --network=host \
+  -e NSL_BRIDGE_HOST=host.docker.internal \
+  -e NSL_BRIDGE_PORT=<port> \
+  ghcr.io/creatidy/notebook-session-labs-mcp:latest
+```
+
+The `-i` flag keeps stdin open for the stdio-based MCP transport. Without `--network=host`, the container may not be able to connect to the loopback bridge depending on the platform's Docker networking configuration.

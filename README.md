@@ -58,7 +58,7 @@ pnpm --filter @notebook-session-labs/mcp-server start
 The MCP server is also available as a Docker image from GHCR:
 
 ```bash
-docker run --rm \
+docker run -i --rm --network=host \
   -e NSL_BRIDGE_HOST=host.docker.internal \
   -e NSL_BRIDGE_PORT=<port> \
   -e NSL_BRIDGE_TOKEN=<token> \

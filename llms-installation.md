@@ -38,13 +38,13 @@ node packages/mcp-server/dist/index.js
 ## Option 2: Docker
 
 ```bash
-docker run --rm \
+docker run -i --rm --network=host \
   -e NSL_BRIDGE_HOST=host.docker.internal \
   -e NSL_BRIDGE_PORT=<port> \
   ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
 
-When using Docker, set `NSL_BRIDGE_HOST` to `host.docker.internal` (or the Docker host IP) so the container can reach the VS Code bridge on the host.
+When using Docker, set `NSL_BRIDGE_HOST` to `host.docker.internal` (or the Docker host IP) so the container can reach the VS Code bridge on the host. The `--network=host` flag allows the container to access the host network directly, which simplifies connectivity to the loopback bridge.
 
 The Docker image is published to GHCR: `ghcr.io/creatidy/notebook-session-labs-mcp`.
 
@@ -77,7 +77,7 @@ Add to your MCP server configuration:
     "notebook-session-labs": {
       "command": "docker",
       "args": [
-        "run", "--rm",
+        "run", "-i", "--rm", "--network=host",
         "-e", "NSL_BRIDGE_HOST",
         "-e", "NSL_BRIDGE_PORT",
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
@@ -101,7 +101,7 @@ If you set `notebookSessionLabs.bridge.authMode` to `"token"`, include `NSL_BRID
     "notebook-session-labs": {
       "command": "docker",
       "args": [
-        "run", "--rm",
+        "run", "-i", "--rm", "--network=host",
         "-e", "NSL_BRIDGE_HOST",
         "-e", "NSL_BRIDGE_PORT",
         "-e", "NSL_BRIDGE_TOKEN",
@@ -133,4 +133,4 @@ If you set `notebookSessionLabs.bridge.authMode` to `"token"`, include `NSL_BRID
 | `Bridge health check failed` | Extension not running or wrong host/port | Ensure VS Code is open with a notebook and the bridge is active |
 | `ECONNREFUSED` | Wrong host or port | Verify `NSL_BRIDGE_HOST` and `NSL_BRIDGE_PORT` match the extension status bar |
 | `401 Unauthorized` | Token auth enabled but wrong/missing token | Set `NSL_BRIDGE_TOKEN` or disable token auth in extension settings |
-| Connection refused from Docker | Container cannot reach host | Use `host.docker.internal` or the Docker bridge IP for `NSL_BRIDGE_HOST` |
+| Connection refused from Docker | Container cannot reach host | Use `--network=host` flag, and set `NSL_BRIDGE_HOST` to `host.docker.internal` |

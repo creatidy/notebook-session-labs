@@ -7,6 +7,7 @@
         "run",
         "-i",
         "--rm",
+        "--network=host",
         "-e", "NSL_BRIDGE_HOST=host.docker.internal",
         "-e", "NSL_BRIDGE_PORT=3939",
         "-e", "NSL_BRIDGE_TOKEN=your-token-here",
