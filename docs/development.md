@@ -52,12 +52,16 @@ To test:
 ### mcp-server
 Standalone Node.js MCP server that connects to the bridge.
 
-To test locally:
+To test locally (no token needed by default):
 ```bash
 export NSL_BRIDGE_HOST=127.0.0.1
 export NSL_BRIDGE_PORT=<port>
-export NSL_BRIDGE_TOKEN=<token>
 node packages/mcp-server/dist/index.js
+```
+
+If token auth is enabled (`notebookSessionLabs.bridge.authMode: "token"`), also set:
+```bash
+export NSL_BRIDGE_TOKEN=<token>
 ```
 
 ## Testing

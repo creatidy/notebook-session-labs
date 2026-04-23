@@ -46,7 +46,6 @@ COPY --from=builder /app/packages/mcp-server/package.json ./packages/mcp-server/
 # Environment variables — must be set at runtime
 ENV NSL_BRIDGE_HOST=127.0.0.1
 ENV NSL_BRIDGE_PORT=""
-ENV NSL_BRIDGE_TOKEN=""
 ENV NSL_LOG_LEVEL=info
 
 WORKDIR /app/packages/mcp-server

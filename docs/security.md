@@ -13,12 +13,13 @@ Notebook Session Labs uses a local bridge architecture with strong default secur
 - The bridge is only accessible from the local machine
 
 ### Authentication
-- An ephemeral bearer token is generated at extension startup
-- The token is 64 hex characters (256 bits of entropy)
-- The token is validated using constant-time comparison
-- The token is never persisted to disk
-- The token is never logged at info level or below
-- Token is required for all `/rpc` endpoints
+- **Default mode (`none`)**: No token required for local loopback connections. The bridge is only accessible from the local machine, making additional auth unnecessary for typical usage.
+- **Optional token mode**: When enabled via `notebookSessionLabs.bridge.authMode` set to `"token"`, an ephemeral bearer token is generated at startup:
+  - The token is 64 hex characters (256 bits of entropy)
+  - The token is validated using constant-time comparison
+  - The token is never persisted to disk
+  - The token is never logged at info level or below
+  - Token is required for all `/rpc` endpoints
 - The `/health` endpoint does not require authentication (returns only status)
 
 ### Transport
@@ -54,12 +55,14 @@ Notebook Session Labs uses a local bridge architecture with strong default secur
 
 - Bridge host defaults to `127.0.0.1`
 - Bridge port defaults to ephemeral (random)
-- Bridge token is always auto-generated (override only for development)
+- Bridge auth mode defaults to `none` (no token required for loopback)
+- Bridge token auth is available as an optional hardening mode
 - Max output size is configurable to prevent memory issues
 - Image output can be disabled to reduce response size
 
 ## Future Considerations
 
 - If HTTP transport is added for the MCP server, TLS and additional auth will be required
-- If remote bridge access is ever needed, full TLS + auth must be implemented first
+- If remote bridge access is ever needed, full TLS + token auth must be implemented first
+- Non-loopback binding requires token auth to be enabled
 - OpenTelemetry integration must respect the no-telemetry-by-default policy

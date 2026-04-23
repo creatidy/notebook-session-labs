@@ -19,28 +19,29 @@ import pino, { type Logger } from "pino";
 function getConfig(): BridgeClientConfig {
   const host = process.env.NSL_BRIDGE_HOST || "127.0.0.1";
   const port = parseInt(process.env.NSL_BRIDGE_PORT || "0", 10);
-  const token = process.env.NSL_BRIDGE_TOKEN || "";
+  const token = process.env.NSL_BRIDGE_TOKEN || undefined;
   const timeoutMs = parseInt(
     process.env.NSL_REQUEST_TIMEOUT || String(DEFAULT_REQUEST_TIMEOUT_MS),
     10,
   );
 
-  if (!token) {
+  if (!port) {
     console.error(
-      "ERROR: NSL_BRIDGE_TOKEN environment variable is required. " +
-      "Start the VS Code extension bridge first and copy the token.",
+      "ERROR: NSL_BRIDGE_PORT environment variable is required. " +
+      "Start the VS Code extension bridge first and set the port.",
     );
     // eslint-disable-next-line no-process-exit
     process.exit(1);
   }
 
-  if (!port) {
+  if (token) {
     console.error(
-      "ERROR: NSL_BRIDGE_PORT environment variable is required. " +
-      "Start the VS Code extension bridge first and copy the port.",
+      "NOTE: NSL_BRIDGE_TOKEN is set. Using token authentication.",
     );
-    // eslint-disable-next-line no-process-exit
-    process.exit(1);
+  } else {
+    console.error(
+      "NOTE: NSL_BRIDGE_TOKEN is not set. Connecting without token auth.",
+    );
   }
 
   return { host, port, token, timeoutMs };

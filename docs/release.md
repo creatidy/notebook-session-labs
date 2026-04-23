@@ -98,9 +98,10 @@ docker build -t ghcr.io/creatidy/notebook-session-labs-mcp:local .
 docker run --rm \
   -e NSL_BRIDGE_HOST=host.docker.internal \
   -e NSL_BRIDGE_PORT=<port> \
-  -e NSL_BRIDGE_TOKEN=<token> \
   ghcr.io/creatidy/notebook-session-labs-mcp:local
 ```
+
+If token auth is enabled, add `-e NSL_BRIDGE_TOKEN=<token>`.
 
 ### Push Docker image manually to GHCR
 

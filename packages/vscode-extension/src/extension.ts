@@ -7,7 +7,8 @@
 import * as vscode from "vscode";
 import { initLogger, getLogger, disposeLogger, showOutputChannel } from "./utils/logger.js";
 import { startServer, stopServer, type BridgeServerInfo } from "./bridge/server.js";
-import { DEFAULT_BRIDGE_HOST, DEFAULT_BRIDGE_PORT, DEFAULT_MAX_OUTPUT_SIZE } from "@notebook-session-labs/shared";
+import { DEFAULT_BRIDGE_HOST, DEFAULT_BRIDGE_PORT, DEFAULT_MAX_OUTPUT_SIZE, DEFAULT_BRIDGE_AUTH_MODE } from "@notebook-session-labs/shared";
+import type { BridgeAuthMode } from "@notebook-session-labs/shared";
 
 let statusBarItem: vscode.StatusBarItem;
 let currentBridgeInfo: BridgeServerInfo | null = null;
@@ -84,18 +85,20 @@ async function startBridgeCommand(): Promise<void> {
   const port = config.get<number>("bridge.port", DEFAULT_BRIDGE_PORT);
   const maxOutputSize = config.get<number>("output.maxSize", DEFAULT_MAX_OUTPUT_SIZE);
   const includeImages = config.get<boolean>("output.includeImages", true);
+  const authMode = config.get<BridgeAuthMode>("bridge.authMode", DEFAULT_BRIDGE_AUTH_MODE);
 
   try {
-    currentBridgeInfo = await startServer(host, port, maxOutputSize, includeImages);
+    currentBridgeInfo = await startServer(host, port, maxOutputSize, includeImages, authMode);
     updateStatusBar(true);
 
     log.info(
-      { host: currentBridgeInfo.host, port: currentBridgeInfo.port },
+      { host: currentBridgeInfo.host, port: currentBridgeInfo.port, authMode: currentBridgeInfo.authMode },
       "Bridge started",
     );
 
+    const authLabel = currentBridgeInfo.authMode === "token" ? " (token auth)" : "";
     vscode.window.setStatusBarMessage(
-      `Notebook Session Labs: Bridge running on port ${currentBridgeInfo.port}`,
+      `Notebook Session Labs: Bridge running on port ${currentBridgeInfo.port}${authLabel}`,
       5000,
     );
   } catch (err) {
@@ -137,8 +140,9 @@ function showBridgeStatusCommand(): void {
   showOutputChannel();
 
   if (currentBridgeInfo) {
+    const authLabel = currentBridgeInfo.authMode === "token" ? "token auth" : "no auth";
     vscode.window.showInformationMessage(
-      `Notebook Session Labs: Bridge running at http://${currentBridgeInfo.host}:${currentBridgeInfo.port}`,
+      `Notebook Session Labs: Bridge running at http://${currentBridgeInfo.host}:${currentBridgeInfo.port} (${authLabel})`,
     );
   } else {
     vscode.window.showInformationMessage(
@@ -152,8 +156,9 @@ function showBridgeStatusCommand(): void {
  */
 function updateStatusBar(running: boolean): void {
   if (running && currentBridgeInfo) {
-    statusBarItem.text = "$(plug) Notebook Bridge";
-    statusBarItem.tooltip = `Notebook Session Labs bridge running on port ${currentBridgeInfo.port}`;
+    const authLabel = currentBridgeInfo.authMode === "token" ? " (token)" : "";
+    statusBarItem.text = `$(plug) Notebook Bridge${authLabel}`;
+    statusBarItem.tooltip = `Notebook Session Labs bridge running on port ${currentBridgeInfo.port}, auth: ${currentBridgeInfo.authMode}`;
     statusBarItem.backgroundColor = undefined;
   } else {
     statusBarItem.text = "$(plug) Notebook Bridge (off)";

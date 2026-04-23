@@ -65,6 +65,16 @@
           "default": true,
           "description": "Automatically start the bridge when a notebook is opened"
         },
+        "notebookSessionLabs.bridge.authMode": {
+          "type": "string",
+          "default": "none",
+          "enum": ["none", "token"],
+          "enumDescriptions": [
+            "No token required for local loopback connections (default)",
+            "Require an ephemeral bearer token for all bridge requests"
+          ],
+          "description": "Bridge authentication mode. 'none' for local loopback (default), 'token' for optional hardening"
+        },
         "notebookSessionLabs.logging.level": {
           "type": "string",
           "default": "info",

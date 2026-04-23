@@ -1,21 +1,25 @@
 /**
  * Local loopback HTTP bridge server.
  *
- * Binds to 127.0.0.1 only with an ephemeral port and bearer token auth.
+ * Binds to 127.0.0.1 only with an ephemeral port.
+ * Auth mode defaults to "none" (no token required for local loopback).
+ * Token auth is available as an optional hardening mode.
  * Accepts JSON-RPC 2.0 requests and dispatches to handlers.
  */
 import * as http from "http";
 import { handleRequest } from "./handlers.js";
-import { extractBearerToken, generateToken, validateToken } from "./auth.js";
+import { extractBearerToken, generateToken, validateToken, setAuthMode, isTokenAuthEnabled, invalidateToken } from "./auth.js";
 import { getLogger } from "../utils/logger.js";
 import { ErrorCode, createJsonRpcError } from "@notebook-session-labs/shared";
+import type { BridgeAuthMode } from "@notebook-session-labs/shared";
 
 const log = getLogger();
 
 export interface BridgeServerInfo {
   host: string;
   port: number;
-  token: string;
+  authMode: BridgeAuthMode;
+  token: string | null;
 }
 
 let server: http.Server | null = null;
@@ -29,9 +33,11 @@ export function startServer(
   port: number = 0,
   maxOutputSize: number = 100_000,
   includeImages: boolean = true,
+  authMode: BridgeAuthMode = "none",
 ): Promise<BridgeServerInfo> {
   return new Promise((resolve, reject) => {
-    const token = generateToken();
+    setAuthMode(authMode);
+    const token = isTokenAuthEnabled() ? generateToken() : null;
 
     server = http.createServer(
       (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -47,9 +53,9 @@ export function startServer(
     server.listen(port, host, () => {
       const addr = server!.address();
       if (typeof addr === "object" && addr !== null) {
-        serverInfo = { host: addr.address, port: addr.port, token };
+        serverInfo = { host: addr.address, port: addr.port, authMode, token };
         log.info(
-          { host: addr.address, port: addr.port },
+          { host: addr.address, port: addr.port, authMode },
           "Bridge server started",
         );
         resolve(serverInfo);
@@ -77,6 +83,7 @@ export async function stopServer(): Promise<void> {
         log.info("Bridge server stopped");
         server = null;
         serverInfo = null;
+        invalidateToken();
         resolve();
       }
     });
@@ -120,17 +127,19 @@ async function handleHttpRequest(
   }
 
   // Authenticate
-  const authHeader = req.headers.authorization;
-  const token = extractBearerToken(authHeader);
-  if (!token || !validateToken(token)) {
-    log.warn({ remoteAddress: req.socket.remoteAddress }, "Auth failed");
-    res.writeHead(401, { "Content-Type": "application/json" });
-    res.end(
-      JSON.stringify(
-        createJsonRpcError(null, ErrorCode.BRIDGE_AUTH_FAILED, "Unauthorized"),
-      ),
-    );
-    return;
+  if (isTokenAuthEnabled()) {
+    const authHeader = req.headers.authorization;
+    const token = extractBearerToken(authHeader);
+    if (!validateToken(token)) {
+      log.warn({ remoteAddress: req.socket.remoteAddress }, "Auth failed");
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(
+        JSON.stringify(
+          createJsonRpcError(null, ErrorCode.BRIDGE_AUTH_FAILED, "Unauthorized"),
+        ),
+      );
+      return;
+    }
   }
 
   // Parse body

@@ -22,6 +22,7 @@ import {
   DEFAULT_MAX_OUTPUT_SIZE,
   MAX_OUTPUT_ITEMS_PER_CELL,
   TRUNCATION_MARKER,
+  DEFAULT_BRIDGE_AUTH_MODE,
   type BridgeMethod,
 } from "./constants.js";
 
@@ -325,5 +326,9 @@ describe("Constants", () => {
     expect(DEFAULT_MAX_OUTPUT_SIZE).toBeGreaterThan(0);
     expect(MAX_OUTPUT_ITEMS_PER_CELL).toBeGreaterThan(0);
     expect(TRUNCATION_MARKER).toContain("truncated");
+  });
+
+  it("defaults bridge auth mode to none", () => {
+    expect(DEFAULT_BRIDGE_AUTH_MODE).toBe("none");
   });
 });
