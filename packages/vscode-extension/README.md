@@ -13,9 +13,9 @@ code --install-extension notebook-session-labs-0.1.0.vsix
 ## Usage
 
 1. Open a notebook (`.ipynb`) in VS Code
-2. The bridge starts automatically and shows the port/token in the status bar
-3. Copy the host, port, and token values
-4. Configure your MCP client with those values
+2. The bridge starts automatically and shows the port in the status bar
+3. Configure your MCP client with the host and port values
+4. (Optional) Enable token auth via `notebookSessionLabs.bridge.authMode` for stricter local security
 
 ## Commands
 
@@ -33,6 +33,7 @@ code --install-extension notebook-session-labs-0.1.0.vsix
 | `notebookSessionLabs.bridge.host` | `127.0.0.1` | Bridge host address |
 | `notebookSessionLabs.bridge.port` | `0` | Bridge port (0 = ephemeral) |
 | `notebookSessionLabs.bridge.autoStart` | `true` | Auto-start when a notebook opens |
+| `notebookSessionLabs.bridge.authMode` | `"none"` | Auth mode: `"none"` (default) or `"token"` |
 | `notebookSessionLabs.logging.level` | `info` | Log level |
 | `notebookSessionLabs.output.maxSize` | `100000` | Max output size per cell (bytes) |
 | `notebookSessionLabs.output.includeImages` | `true` | Include image outputs |
@@ -43,9 +44,9 @@ code --install-extension notebook-session-labs-0.1.0.vsix
 MCP Client <--stdio--> MCP Server <--HTTP--> VS Code Extension Bridge <--API--> Notebook
 ```
 
-The extension is the source of truth for notebook access. It uses loopback-only binding with ephemeral bearer token authentication.
+The extension is the source of truth for notebook access. It uses loopback-only binding with optional token authentication.
 
-See the [root README](../../README.md) and [architecture docs](../../docs/architecture.md) for details.
+See the [root README](README.md) and [architecture docs](docs/architecture.md) for details.
 
 ## Requirements
 

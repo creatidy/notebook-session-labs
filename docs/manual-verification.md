@@ -13,7 +13,7 @@ Use this checklist to verify the extension and MCP server work correctly with a 
 - [ ] Open a notebook (`.ipynb`) in the Extension Development Host
 - [ ] Verify the status bar shows "Notebook Bridge" (running)
 - [ ] Run "Notebook Session Labs: Show Bridge Status" command
-- [ ] Note the port and token displayed
+- [ ] Note the port displayed (no token needed by default)
 
 ## MCP Server Verification
 
@@ -21,6 +21,10 @@ Set environment variables:
 ```bash
 export NSL_BRIDGE_HOST=127.0.0.1
 export NSL_BRIDGE_PORT=<port from extension>
+```
+
+If token auth is enabled, also set:
+```bash
 export NSL_BRIDGE_TOKEN=<token from extension>
 ```
 

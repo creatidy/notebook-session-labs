@@ -15,7 +15,7 @@ This project is **not** a direct Jupyter URL/token client. Instead, it uses VS C
 - **Editor-native access**: Works with any notebook session that VS Code can interact with, including managed remote sessions
 - **No credential handling**: The extension never needs API tokens or connection URLs for notebook backends
 - **Stable API surface**: Built on documented VS Code notebook APIs, not on kernel-specific protocols
-- **Security by default**: Loopback-only bridge with ephemeral authentication
+- **Security by default**: Loopback-only bridge with optional token authentication
 
 ## Component Diagram
 
@@ -46,19 +46,20 @@ This project is **not** a direct Jupyter URL/token client. Instead, it uses VS C
 ## Trust Boundaries
 
 - **MCP Client <-> MCP Server**: Stdio transport, process-local. The MCP client trusts the MCP server.
-- **MCP Server <-> Bridge**: Loopback HTTP with ephemeral bearer token. Only accessible on the local machine.
+- **MCP Server <-> Bridge**: Loopback HTTP (no token by default; optional bearer token when `authMode` is `"token"`). Only accessible on the local machine.
 - **Bridge <-> VS Code APIs**: In-process, same trust level as the extension host.
 
 ## Local Bridge Security Model
 
 - Binds to `127.0.0.1` only (never `0.0.0.0`)
 - Uses an ephemeral port (configurable, default: random)
-- Requires an ephemeral bearer token generated at startup
+- **Default auth mode: `none`** — no token required for local loopback connections
+- **Optional token mode**: when `notebookSessionLabs.bridge.authMode` is set to `"token"`, an ephemeral bearer token is generated at startup and required for RPC calls
 - Token is never persisted to disk
 - Token is never logged at info level
 - Bridge shuts down cleanly on extension deactivation
 - Health check endpoint (`GET /health`) does not require authentication
-- RPC endpoint (`POST /rpc`) requires valid bearer token
+- RPC endpoint (`POST /rpc`) requires a valid bearer token only when token auth is enabled
 
 ## Extension Host Responsibilities
 
@@ -91,9 +92,10 @@ This project is **not** a direct Jupyter URL/token client. Instead, it uses VS C
 
 ## Transport Decision
 
-The local bridge uses **loopback HTTP with bearer token** rather than IPC or named pipes. This decision was made because:
+The local bridge uses **loopback HTTP** rather than IPC or named pipes. This decision was made because:
 
 1. HTTP is universally understood and easy to debug
-2. The bearer token model is simple and secure for local-only access
-3. No platform-specific IPC configuration needed
-4. Easy to test with standard HTTP tools (curl, etc.)
+2. Loopback-only binding provides sufficient security for local use without additional auth friction
+3. Optional bearer token auth is available for users who want stricter local hardening
+4. No platform-specific IPC configuration needed
+5. Easy to test with standard HTTP tools (curl, etc.)

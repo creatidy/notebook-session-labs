@@ -28,12 +28,35 @@ describe("checkHealth", () => {
   const defaultConfig = {
     host: "127.0.0.1",
     port: 9999,
-    token: "test-token",
+    token: undefined,
     timeoutMs: 5000,
   };
 
   it("returns failure when server is not running", async () => {
     const result = await checkHealth(defaultConfig);
+    expect(result.ok).toBe(false);
+    expect(result.message).toBeTruthy();
+  });
+
+  it("accepts config with token for token-auth mode", async () => {
+    const tokenConfig = {
+      host: "127.0.0.1",
+      port: 9999,
+      token: "test-token",
+      timeoutMs: 5000,
+    };
+    const result = await checkHealth(tokenConfig);
+    expect(result.ok).toBe(false);
+    expect(result.message).toBeTruthy();
+  });
+
+  it("accepts config without token for no-auth mode", async () => {
+    const noTokenConfig = {
+      host: "127.0.0.1",
+      port: 9999,
+      timeoutMs: 5000,
+    };
+    const result = await checkHealth(noTokenConfig);
     expect(result.ok).toBe(false);
     expect(result.message).toBeTruthy();
   });

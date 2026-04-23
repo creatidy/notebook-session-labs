@@ -101,18 +101,23 @@ export interface ExecutionResult {
   error: string | null;
 }
 
+/** Bridge authentication mode */
+export type BridgeAuthMode = "none" | "token";
+
 /** Bridge configuration */
 export interface BridgeConfig {
   host: string;
   port: number;
-  token: string;
+  authMode: BridgeAuthMode;
+  token?: string;
   enabled: boolean;
 }
 
 /** MCP server configuration */
 export interface McpServerConfig {
   bridgeUrl: string;
-  bridgeToken: string;
+  bridgeToken?: string;
+  authMode: BridgeAuthMode;
   requestTimeoutMs: number;
   maxOutputSize: number;
   includeImages: boolean;

@@ -11,6 +11,9 @@ export const DEFAULT_BRIDGE_HOST = "127.0.0.1";
 /** Default bridge port (0 = ephemeral) */
 export const DEFAULT_BRIDGE_PORT = 0;
 
+/** Default bridge auth mode (no token required for local loopback) */
+export const DEFAULT_BRIDGE_AUTH_MODE = "none" as const;
+
 /** JSON-RPC version string */
 export const JSON_RPC_VERSION = "2.0";
 

@@ -16,7 +16,7 @@ let requestId = 0;
 export interface BridgeClientConfig {
   host: string;
   port: number;
-  token: string;
+  token?: string;
   timeoutMs: number;
 }
 
@@ -53,17 +53,21 @@ export async function callBridge(
   log.debug({ method, id }, "Sending bridge request");
 
   return new Promise((resolve, reject) => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "Content-Length": String(Buffer.byteLength(body)),
+    };
+    if (config.token) {
+      headers["Authorization"] = `Bearer ${config.token}`;
+    }
+
     const req = http.request(
       {
         hostname: config.host,
         port: config.port,
         path: "/rpc",
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Content-Length": Buffer.byteLength(body),
-          Authorization: `Bearer ${config.token}`,
-        },
+        headers,
         timeout: config.timeoutMs,
       },
       (res) => {
