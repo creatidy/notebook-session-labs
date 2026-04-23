@@ -8,7 +8,7 @@
  */
 import * as http from "http";
 import { handleRequest } from "./handlers.js";
-import { extractBearerToken, generateToken, validateToken, setAuthMode, getAuthMode, isTokenAuthEnabled, invalidateToken } from "./auth.js";
+import { extractBearerToken, generateToken, validateToken, setAuthMode, isTokenAuthEnabled, invalidateToken } from "./auth.js";
 import { getLogger } from "../utils/logger.js";
 import { ErrorCode, createJsonRpcError } from "@notebook-session-labs/shared";
 import type { BridgeAuthMode } from "@notebook-session-labs/shared";
