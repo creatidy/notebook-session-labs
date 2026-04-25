@@ -1,7 +1,10 @@
 {
-  "_comment": "Token auth is always enabled. The token is auto-discovered from the port file via the volume mount — no manual token configuration needed.",
+  "_comment": "Linux / WSL / macOS — Token auth is always enabled. The token is auto-discovered from the port file via the volume mount.",
   "mcpServers": {
     "notebook-session-labs": {
+      "disabled": false,
+      "timeout": 60,
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run",
@@ -13,8 +16,7 @@
         "-e",
         "NSL_BRIDGE_HOST=host.docker.internal",
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
-      ],
-      "disabled": false
+      ]
     }
   }
 }

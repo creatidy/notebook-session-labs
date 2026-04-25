@@ -57,7 +57,7 @@ pnpm --filter @notebook-session-labs/mcp-server start
 
 The MCP server is also available as a Docker image from GHCR. The bridge auto-discovers the ephemeral port via a port file — no manual port configuration needed.
 
-### Run with Docker (Linux / WSL)
+### Run with Docker (Linux)
 
 ```bash
 docker run -i --rm --network=host \
@@ -66,49 +66,75 @@ docker run -i --rm --network=host \
   ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
 
-### Run with Docker (Windows / PowerShell)
+### Run with Docker (Windows / macOS)
 
-```powershell
-docker run -i --rm --network=host `
-  -v "$env:TEMP\notebook-session-labs:/tmp/notebook-session-labs" `
-  -e NSL_BRIDGE_HOST=host.docker.internal `
+```bash
+docker run -i --rm --network=host \
+  -v ~/.notebook-session-labs:/tmp/notebook-session-labs \
+  -e NSL_BRIDGE_HOST=host.docker.internal \
   ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
 
-> **Note:** The extension writes port files to `/tmp/notebook-session-labs/` on Linux/macOS and `%TEMP%\notebook-session-labs\` on Windows. The Docker container reads them from the same path via a bind mount — no user-specific paths or `${HOME}` expansion needed.
+> **Note:** On Linux the extension writes port files to `/tmp/notebook-session-labs/`. On Windows and macOS the default is `~/.notebook-session-labs/`. The Docker container reads them from `/tmp/notebook-session-labs` via a bind mount. You can override the extension's state directory by setting the `NSL_STATE_DIR` environment variable in VS Code settings.
 
 See [llms-installation.md](llms-installation.md) for full installation options.
 
 ### Configure an MCP Client
 
-**Auto-discovery (recommended)** — the port is read from the port file written by the extension:
+**Auto-discovery (recommended)** — the port and token are read from the port file written by the extension. The Docker container expects port files at `/tmp/notebook-session-labs` internally.
+
+**Linux:**
 
 ```json
 {
   "servers": {
     "notebook-session-labs": {
-      "command": "node",
-      "args": ["packages/mcp-server/dist/index.js"],
-      "env": {
-        "NSL_BRIDGE_HOST": "127.0.0.1"
-      }
+      "disabled": false,
+      "timeout": 60,
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm", "--network=host",
+        "-v", "/tmp/notebook-session-labs:/tmp/notebook-session-labs",
+        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
+        "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
+      ]
     }
   }
 }
 ```
 
-**Explicit port** — if you set `notebookSessionLabs.bridge.port` to a fixed value in VS Code settings:
+**Windows / macOS:**
+
+```json
+{
+  "servers": {
+    "notebook-session-labs": {
+      "disabled": false,
+      "timeout": 60,
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm", "--network=host",
+        "-v", "~/.notebook-session-labs:/tmp/notebook-session-labs",
+        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
+        "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+**From source (development only)** — if you built from source and want to run the MCP server directly:
 
 ```json
 {
   "servers": {
     "notebook-session-labs": {
       "command": "node",
-      "args": ["packages/mcp-server/dist/index.js"],
+      "args": ["/absolute/path/to/notebook-session-labs/packages/mcp-server/dist/index.js"],
       "env": {
-        "NSL_BRIDGE_HOST": "127.0.0.1",
-        "NSL_BRIDGE_PORT": "3838",
-        "NSL_BRIDGE_TOKEN": "<token>"
+        "NSL_BRIDGE_HOST": "127.0.0.1"
       }
     }
   }

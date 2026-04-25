@@ -8,13 +8,13 @@
  * Accepts JSON-RPC 2.0 requests and dispatches to handlers.
  */
 import * as http from "http";
-import * as fs from "node:fs";
 import * as os from "node:os";
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { handleRequest } from "./handlers.js";
 import { extractBearerToken, generateToken, validateToken, setAuthMode, invalidateToken } from "./auth.js";
 import { getLogger } from "../utils/logger.js";
-import { ErrorCode, createJsonRpcError, BRIDGE_PORT_FILE_DIR, BRIDGE_PORT_FILE_PATTERN, BRIDGE_PORT_FILE_MAX_AGE_MS } from "@notebook-session-labs/shared";
+import { ErrorCode, createJsonRpcError, BRIDGE_PORT_FILE_PATTERN, BRIDGE_PORT_FILE_MAX_AGE_MS, BRIDGE_STATE_DIR, BRIDGE_PORT_FILE_DIR } from "@notebook-session-labs/shared";
 import type { BridgeAuthMode } from "@notebook-session-labs/shared";
 
 const log = getLogger();
@@ -24,27 +24,42 @@ export interface BridgeServerInfo {
   port: number;
   authMode: BridgeAuthMode;
   token: string | null;
+  /** Absolute path to the directory where port files are stored */
+  stateDir: string;
+  /** Absolute path to this session's port file */
+  portFilePath: string;
+}
+
+/**
+ * Get the platform-specific default state directory for bridge port files.
+ *
+ * - Linux/macOS/WSL: `/tmp/notebook-session-labs`
+ * - Windows: `%TEMP%\notebook-session-labs`
+ */
+function getDefaultStateDir(): string {
+  if (process.platform === "win32") {
+    return path.join(os.tmpdir(), BRIDGE_STATE_DIR);
+  }
+  return BRIDGE_PORT_FILE_DIR;
 }
 
 let server: http.Server | null = null;
 let serverInfo: BridgeServerInfo | null = null;
+/** Configured state directory (set during startServer) */
+let configuredStateDir: string = getDefaultStateDir();
 
 /**
  * Get the directory for bridge port files.
  *
- * Uses NSL_STATE_DIR if set (for Docker/custom setups).
- * Otherwise uses the platform temp directory via BRIDGE_PORT_FILE_DIR
- * (/tmp/notebook-session-labs on Linux/macOS, resolved via os.tmpdir() on Windows).
+ * Uses the configured stateDir (from VS Code setting `notebookSessionLabs.bridge.stateDir`),
+ * falling back to the platform-specific default via getDefaultStateDir().
+ *
+ * Platform defaults:
+ * - Linux/macOS/WSL: `/tmp/notebook-session-labs`
+ * - Windows: `%TEMP%\notebook-session-labs`
  */
 function getStateDir(): string {
-  if (process.env.NSL_STATE_DIR) {
-    return process.env.NSL_STATE_DIR;
-  }
-  // On Windows, use os.tmpdir(); on Linux/macOS use the fixed /tmp path
-  if (process.platform === "win32") {
-    return path.join(os.tmpdir(), BRIDGE_PORT_FILE_DIR.replace(/^\//, ""));
-  }
-  return BRIDGE_PORT_FILE_DIR;
+  return configuredStateDir;
 }
 
 /**
@@ -127,7 +142,7 @@ function writePortFile(info: BridgeServerInfo): void {
     } catch {
       log.error(
         { dir, hint: "Run: sudo chmod 1777 " + dir },
-        "Port file directory is not writable. Fix permissions or set NSL_STATE_DIR to a writable path.",
+        "Port file directory is not writable. Fix permissions or set notebookSessionLabs.bridge.stateDir to a writable path.",
       );
       return;
     }
@@ -140,8 +155,7 @@ function writePortFile(info: BridgeServerInfo): void {
     };
     fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
     // Restrict file permissions to owner-only (rw-------) since it contains
-    // the auth token. Other processes on the same machine that need access
-    // should use NSL_STATE_DIR with appropriate group/user permissions.
+    // the auth token.
     try {
       fs.chmodSync(filePath, 0o600);
     } catch {
@@ -170,6 +184,8 @@ function removePortFile(): void {
 
 /**
  * Start the bridge HTTP server.
+ *
+ * @param stateDir Directory for bridge port files. Falls back to platform default if empty.
  */
 export function startServer(
   host: string = "127.0.0.1",
@@ -177,7 +193,13 @@ export function startServer(
   maxOutputSize: number = 100_000,
   includeImages: boolean = true,
   authMode: BridgeAuthMode = "token",
+  stateDir?: string,
 ): Promise<BridgeServerInfo> {
+  // Resolve state directory: explicit setting → platform default
+  configuredStateDir = stateDir && stateDir.trim() !== ""
+    ? path.resolve(stateDir)
+    : getDefaultStateDir();
+
   return new Promise((resolve, reject) => {
     setAuthMode(authMode);
     const token = generateToken();
@@ -196,10 +218,18 @@ export function startServer(
     server.listen(port, host, () => {
       const addr = server!.address();
       if (typeof addr === "object" && addr !== null) {
-        serverInfo = { host: addr.address, port: addr.port, authMode, token };
+        const portFilePath = getPortFilePath();
+        serverInfo = {
+          host: addr.address,
+          port: addr.port,
+          authMode,
+          token,
+          stateDir: configuredStateDir,
+          portFilePath,
+        };
         writePortFile(serverInfo);
         log.info(
-          { host: addr.address, port: addr.port, authMode },
+          { host: addr.address, port: addr.port, authMode, stateDir: configuredStateDir, portFilePath },
           "Bridge server started",
         );
         resolve(serverInfo);

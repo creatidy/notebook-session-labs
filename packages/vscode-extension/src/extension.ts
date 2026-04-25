@@ -90,19 +90,28 @@ async function startBridgeCommand(): Promise<void> {
   const maxOutputSize = config.get<number>("output.maxSize", DEFAULT_MAX_OUTPUT_SIZE);
   const includeImages = config.get<boolean>("output.includeImages", true);
   const authMode = config.get<BridgeAuthMode>("bridge.authMode", DEFAULT_BRIDGE_AUTH_MODE);
+  const stateDir = config.get<string>("bridge.stateDir", "");
 
   try {
-    currentBridgeInfo = await startServer(host, port, maxOutputSize, includeImages, authMode);
+    currentBridgeInfo = await startServer(host, port, maxOutputSize, includeImages, authMode, stateDir);
     updateStatusBar(true);
 
     log.info(
-      { host: currentBridgeInfo.host, port: currentBridgeInfo.port, authMode: currentBridgeInfo.authMode },
+      { host: currentBridgeInfo.host, port: currentBridgeInfo.port, authMode: currentBridgeInfo.authMode, stateDir: currentBridgeInfo.stateDir },
       "Bridge started",
     );
 
     vscode.window.setStatusBarMessage(
       `Notebook Session Labs: Bridge running on port ${currentBridgeInfo.port} (token auth)`,
       5000,
+    );
+
+    // Show port file path and Docker mount hint
+    const dockerMount = `-v ${currentBridgeInfo.stateDir}:/tmp/notebook-session-labs`;
+    vscode.window.showInformationMessage(
+      `Notebook Session Labs: Bridge running on port ${currentBridgeInfo.port}. ` +
+      `Port file: ${currentBridgeInfo.stateDir} ` +
+      `(Docker mount: ${dockerMount})`,
     );
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
@@ -144,7 +153,7 @@ function showBridgeStatusCommand(): void {
 
   if (currentBridgeInfo) {
     vscode.window.showInformationMessage(
-      `Notebook Session Labs: Bridge running at http://${currentBridgeInfo.host}:${currentBridgeInfo.port} (token auth)`,
+      `Notebook Session Labs: Bridge running at http://${currentBridgeInfo.host}:${currentBridgeInfo.port} (token auth). State dir: ${currentBridgeInfo.stateDir}`,
     );
   } else {
     vscode.window.showInformationMessage(

@@ -75,6 +75,11 @@
           ],
           "description": "Bridge authentication mode. Token auth is always enforced regardless of this setting. The token is auto-generated and written to the port file for MCP client discovery."
         },
+        "notebookSessionLabs.bridge.stateDir": {
+          "type": "string",
+          "default": "",
+          "description": "Directory for bridge port files (used by Docker containers to discover the bridge). Leave empty for platform default: Linux/macOS/WSL → /tmp/notebook-session-labs, Windows → C:\\Users\\<you>\\AppData\\Local\\Temp\\notebook-session-labs. The actual resolved path is shown in the bridge status notification on startup. Mount this path to /tmp/notebook-session-labs in your Docker config."
+        },
         "notebookSessionLabs.logging.level": {
           "type": "string",
           "default": "info",

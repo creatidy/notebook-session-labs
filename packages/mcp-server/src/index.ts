@@ -32,8 +32,9 @@ import pino, { type Logger } from "pino";
  * the most recently modified valid one.
  */
 function readPortFile(): { port: number; host: string; token?: string } | null {
-  // Priority: NSL_STATE_DIR env → /tmp/notebook-session-labs (default)
-  const stateDir = process.env.NSL_STATE_DIR || BRIDGE_PORT_FILE_DIR;
+  // Always use the container-side path — the Docker volume mount maps the host
+  // stateDir (configured in VS Code settings) to /tmp/notebook-session-labs.
+  const stateDir = BRIDGE_PORT_FILE_DIR;
 
   if (!existsSync(stateDir)) {
     return null;
