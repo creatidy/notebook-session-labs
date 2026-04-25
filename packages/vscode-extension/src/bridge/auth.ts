@@ -1,40 +1,53 @@
 /**
  * Bridge authentication - ephemeral bearer token generation and validation.
  *
- * Supports two modes:
- * - "none": No token required (default for local loopback).
- * - "token": Ephemeral bearer token generated and validated on each request.
+ * Token authentication is **always enabled** for security. The bridge opens
+ * a port on the local machine and any process that discovers the port could
+ * execute arbitrary code via notebook cells. Requiring a token eliminates
+ * this risk.
+ *
+ * The legacy "none" mode is silently upgraded to "token" so existing
+ * configurations remain functional without error.
  */
 import * as crypto from "crypto";
 import type { BridgeAuthMode } from "@notebook-session-labs/shared";
 
-let authMode: BridgeAuthMode = "none";
 let currentToken: string | null = null;
 
 /**
  * Set the authentication mode.
+ *
+ * "none" is silently upgraded to "token" — token auth is always enforced.
+ * This is a no-op kept for backward compatibility with callers that still
+ * pass an auth mode.
  */
-export function setAuthMode(mode: BridgeAuthMode): void {
-  authMode = mode;
+export function setAuthMode(_mode: BridgeAuthMode): void {
+  // Token auth is always enforced regardless of the mode argument.
 }
 
 /**
  * Get the current authentication mode.
+ *
+ * Always returns "token". Kept for callers that query the mode.
  */
 export function getAuthMode(): BridgeAuthMode {
-  return authMode;
+  return "token";
 }
 
 /**
  * Check whether token authentication is enabled.
+ *
+ * Always returns true — token auth is mandatory.
  */
 export function isTokenAuthEnabled(): boolean {
-  return authMode === "token";
+  return true;
 }
 
 /**
- * Generate a new ephemeral bearer token.
- * Only meaningful when auth mode is "token".
+ * Generate a new ephemeral bearer token (64 hex characters, 256 bits of entropy).
+ *
+ * Called once at bridge startup. The token is written to the port file so
+ * that MCP clients can discover it automatically.
  */
 export function generateToken(): string {
   currentToken = crypto.randomBytes(32).toString("hex");
@@ -43,12 +56,12 @@ export function generateToken(): string {
 
 /**
  * Validate a bearer token against the current token.
- * Returns true only when token auth is enabled and the token matches.
+ *
+ * Uses constant-time comparison to prevent timing attacks.
+ * Always returns false if no token has been generated or if the
+ * provided token is empty/null.
  */
 export function validateToken(token: string | null | undefined): boolean {
-  if (authMode === "none") {
-    return true;
-  }
   if (!currentToken || !token) {
     return false;
   }
@@ -59,18 +72,17 @@ export function validateToken(token: string | null | undefined): boolean {
 }
 
 /**
- * Get the current token (for external display when token mode is enabled).
+ * Get the current token (for writing to the port file).
  */
 export function getCurrentToken(): string | null {
   return currentToken;
 }
 
 /**
- * Invalidate the current token and reset auth mode.
+ * Invalidate the current token (called on bridge shutdown).
  */
 export function invalidateToken(): void {
   currentToken = null;
-  authMode = "none";
 }
 
 /**

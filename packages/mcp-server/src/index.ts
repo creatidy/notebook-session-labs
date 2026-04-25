@@ -31,7 +31,7 @@ import pino, { type Logger } from "pino";
  * Scans the state directory for bridge-<pid>.json files and returns
  * the most recently modified valid one.
  */
-function readPortFile(): { port: number; host: string } | null {
+function readPortFile(): { port: number; host: string; token?: string } | null {
   // Priority: NSL_STATE_DIR env → /tmp/notebook-session-labs (default)
   const stateDir = process.env.NSL_STATE_DIR || BRIDGE_PORT_FILE_DIR;
 
@@ -41,7 +41,7 @@ function readPortFile(): { port: number; host: string } | null {
 
   try {
     const entries = readdirSync(stateDir);
-    let bestMatch: { port: number; host: string; mtimeMs: number } | null = null;
+    let bestMatch: { port: number; host: string; token?: string; mtimeMs: number } | null = null;
 
     for (const entry of entries) {
       if (!BRIDGE_PORT_FILE_PATTERN.test(entry)) {
@@ -52,11 +52,11 @@ function readPortFile(): { port: number; host: string } | null {
       try {
         const stat = statSync(filePath);
         const raw = readFileSync(filePath, "utf-8");
-        const data = JSON.parse(raw) as { port: number; host: string; pid: number; startedAt: string };
+        const data = JSON.parse(raw) as { port: number; host: string; pid: number; token?: string; startedAt: string };
 
         if (typeof data.port === "number" && data.port > 0) {
           if (!bestMatch || stat.mtimeMs > bestMatch.mtimeMs) {
-            bestMatch = { port: data.port, host: data.host || "127.0.0.1", mtimeMs: stat.mtimeMs };
+            bestMatch = { port: data.port, host: data.host || "127.0.0.1", token: data.token, mtimeMs: stat.mtimeMs };
           }
         }
       } catch {
@@ -64,18 +64,19 @@ function readPortFile(): { port: number; host: string } | null {
       }
     }
 
-    return bestMatch ? { port: bestMatch.port, host: bestMatch.host } : null;
+    return bestMatch ? { port: bestMatch.port, host: bestMatch.host, token: bestMatch.token } : null;
   } catch {
     // Can't read directory
   }
   return null;
 }
 
-function buildConfig(portFile: { port: number; host: string } | null): BridgeClientConfig {
+function buildConfig(portFile: { port: number; host: string; token?: string } | null): BridgeClientConfig {
   const envPort = parseInt(process.env.NSL_BRIDGE_PORT || "0", 10);
   const host = process.env.NSL_BRIDGE_HOST || portFile?.host || "127.0.0.1";
   const port = envPort || portFile?.port || 0;
-  const token = process.env.NSL_BRIDGE_TOKEN || undefined;
+  // Token priority: NSL_BRIDGE_TOKEN env → port file auto-discovered token
+  const token = process.env.NSL_BRIDGE_TOKEN || portFile?.token || undefined;
   const timeoutMs = parseInt(
     process.env.NSL_REQUEST_TIMEOUT || String(DEFAULT_REQUEST_TIMEOUT_MS),
     10,
@@ -101,9 +102,10 @@ function initConfig(): { config: BridgeClientConfig; portFileSource: string | nu
   }
 
   if (config.token) {
-    console.error("NOTE: NSL_BRIDGE_TOKEN is set. Using token authentication.");
+    const tokenSource = process.env.NSL_BRIDGE_TOKEN ? "NSL_BRIDGE_TOKEN env" : "port file auto-discovery";
+    console.error(`NOTE: Token authentication enabled (source: ${tokenSource}).`);
   } else {
-    console.error("NOTE: NSL_BRIDGE_TOKEN is not set. Connecting without token auth.");
+    console.error("WARNING: No auth token discovered. The bridge requires token authentication. Set NSL_BRIDGE_TOKEN or ensure the port file is accessible.");
   }
 
   return { config, portFileSource };

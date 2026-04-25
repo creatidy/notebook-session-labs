@@ -1,4 +1,5 @@
 {
+  "_comment": "Token auth is always enabled. The token is auto-discovered from the port file via the volume mount — no manual token configuration needed.",
   "mcpServers": {
     "notebook-session-labs": {
       "command": "docker",

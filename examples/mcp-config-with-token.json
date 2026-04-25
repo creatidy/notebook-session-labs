@@ -1,5 +1,5 @@
 {
-  "_comment": "Advanced config with token auth enabled. Use this when notebookSessionLabs.bridge.authMode is set to 'token' in VS Code settings. The port is auto-discovered via the port file volume mount.",
+  "_comment": "Token auth is always enabled. The token is auto-discovered from the port file via the volume mount. Only set NSL_BRIDGE_TOKEN explicitly if auto-discovery is not possible (e.g., different user or restricted file permissions).",
   "mcpServers": {
     "notebook-session-labs": {
       "command": "docker",

@@ -19,7 +19,10 @@ See [docs/security.md](docs/security.md) for the full security model.
 ## Security Properties
 
 - Bridge binds to loopback only (127.0.0.1)
-- Ephemeral bearer token authentication
+- **Always-on ephemeral bearer token authentication** (256-bit, auto-generated, no user config needed)
+- Token auto-discovered by MCP clients via port file (no manual configuration required)
+- Port file permissions restricted to owner-only (`0600`)
+- Constant-time token comparison (timing attack prevention)
 - No telemetry by default
 - No data sent to external services
 - Debug logging requires explicit opt-in

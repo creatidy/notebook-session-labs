@@ -15,7 +15,7 @@ code --install-extension notebook-session-labs-0.1.0.vsix
 1. Open a notebook (`.ipynb`) in VS Code
 2. The bridge starts automatically and shows the port in the status bar
 3. Configure your MCP client with the host and port values
-4. (Optional) Enable token auth via `notebookSessionLabs.bridge.authMode` for stricter local security
+4. Token authentication is always enabled — no configuration needed. The token is auto-generated and shared via the port file.
 
 ## Commands
 
@@ -33,7 +33,7 @@ code --install-extension notebook-session-labs-0.1.0.vsix
 | `notebookSessionLabs.bridge.host` | `127.0.0.1` | Bridge host address |
 | `notebookSessionLabs.bridge.port` | `0` | Bridge port (0 = ephemeral) |
 | `notebookSessionLabs.bridge.autoStart` | `true` | Auto-start when a notebook opens |
-| `notebookSessionLabs.bridge.authMode` | `"none"` | Auth mode: `"none"` (default) or `"token"` |
+| `notebookSessionLabs.bridge.authMode` | `"token"` | Token auth is always enforced (setting is for backward compatibility) |
 | `notebookSessionLabs.logging.level` | `info` | Log level |
 | `notebookSessionLabs.output.maxSize` | `100000` | Max output size per cell (bytes) |
 | `notebookSessionLabs.output.includeImages` | `true` | Include image outputs |
@@ -158,7 +158,7 @@ If you use a fixed port (`notebookSessionLabs.bridge.port` in settings):
 }
 ```
 
-See [llms-installation.md](../../llms-installation.md) for full configuration options including token auth.
+See [llms-installation.md](../../llms-installation.md) for full configuration options. Token auth is always enabled.
 
 ## Architecture
 
@@ -166,7 +166,7 @@ See [llms-installation.md](../../llms-installation.md) for full configuration op
 MCP Client <--stdio--> MCP Server <--HTTP--> VS Code Extension Bridge <--API--> Notebook
 ```
 
-The extension is the source of truth for notebook access. It uses loopback-only binding with optional token authentication.
+The extension is the source of truth for notebook access. It uses loopback-only binding with always-on token authentication.
 
 See the [root README](../../README.md) and [architecture docs](../../docs/architecture.md) for details.
 

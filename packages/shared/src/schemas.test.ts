@@ -328,7 +328,7 @@ describe("Constants", () => {
     expect(TRUNCATION_MARKER).toContain("truncated");
   });
 
-  it("defaults bridge auth mode to none", () => {
-    expect(DEFAULT_BRIDGE_AUTH_MODE).toBe("none");
+  it("defaults bridge auth mode to token", () => {
+    expect(DEFAULT_BRIDGE_AUTH_MODE).toBe("token");
   });
 });

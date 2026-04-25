@@ -101,7 +101,14 @@ export interface ExecutionResult {
   error: string | null;
 }
 
-/** Bridge authentication mode */
+/**
+ * Bridge authentication mode.
+ *
+ * **Security note:** Token authentication is always enforced at the bridge
+ * server level. The "none" value is accepted for backward compatibility but
+ * is silently upgraded to "token" — a 256-bit ephemeral bearer token is
+ * generated at startup and written to the port file for MCP client discovery.
+ */
 export type BridgeAuthMode = "none" | "token";
 
 /** Bridge configuration */
@@ -109,6 +116,7 @@ export interface BridgeConfig {
   host: string;
   port: number;
   authMode: BridgeAuthMode;
+  /** Ephemeral bearer token — always populated at runtime */
   token?: string;
   enabled: boolean;
 }
@@ -116,6 +124,7 @@ export interface BridgeConfig {
 /** MCP server configuration */
 export interface McpServerConfig {
   bridgeUrl: string;
+  /** Bearer token — auto-discovered from port file or set via NSL_BRIDGE_TOKEN */
   bridgeToken?: string;
   authMode: BridgeAuthMode;
   requestTimeoutMs: number;

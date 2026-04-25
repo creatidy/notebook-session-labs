@@ -14,12 +14,12 @@ The MCP server uses these environment variables at startup:
 |----------|----------|-------------|
 | `NSL_BRIDGE_HOST` | No | Bridge host (default: `127.0.0.1`) |
 | `NSL_BRIDGE_PORT` | No | Port shown in VS Code status bar (auto-discovered from port files if not set) |
-| `NSL_BRIDGE_TOKEN` | No | Token for auth when `authMode` is `"token"` (not needed by default) |
+| `NSL_BRIDGE_TOKEN` | No | Auth token (auto-discovered from port file if not set; required if port file is inaccessible) |
 | `NSL_LOG_LEVEL` | No | Log level: `debug`, `info`, `warn`, `error` (default: `info`) |
 
-**Default behavior**: The bridge listens on loopback (`127.0.0.1`) only and does not require a token. No `NSL_BRIDGE_TOKEN` is needed for normal local use.
+**Default behavior**: The bridge listens on loopback (`127.0.0.1`) only. Token authentication is **always enabled** — a 256-bit ephemeral bearer token is auto-generated at startup and written to the port file. The MCP server auto-discovers the token from the port file, so no manual `NSL_BRIDGE_TOKEN` configuration is needed in most setups.
 
-**Token auth**: If you enable `notebookSessionLabs.bridge.authMode: "token"` in VS Code settings, you must also set `NSL_BRIDGE_TOKEN` to the token shown in the extension.
+**Override token**: Set `NSL_BRIDGE_TOKEN` explicitly only if the port file is inaccessible (e.g., different user, restricted permissions, or custom setups without the volume mount).
 
 ## Option 1: Build from Source
 
@@ -120,9 +120,9 @@ Mount the port file directory — the MCP server auto-discovers the port:
 }
 ```
 
-### With Token Auth Enabled
+### With Explicit Token (Advanced)
 
-If you set `notebookSessionLabs.bridge.authMode` to `"token"`, include `NSL_BRIDGE_TOKEN`:
+Token auth is always enabled and auto-discovered from the port file via the volume mount. Only set `NSL_BRIDGE_TOKEN` explicitly if auto-discovery is not possible:
 
 ```json
 {
@@ -137,7 +137,7 @@ If you set `notebookSessionLabs.bridge.authMode` to `"token"`, include `NSL_BRID
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
       ],
       "env": {
-        "NSL_BRIDGE_TOKEN": "<token from extension>"
+        "NSL_BRIDGE_TOKEN": "<token from port file>"
       }
     }
   }
@@ -158,5 +158,5 @@ If you set `notebookSessionLabs.bridge.authMode` to `"token"`, include `NSL_BRID
 | `NSL_BRIDGE_PORT is required` | Port not set | Start the VS Code extension and copy the port from the status bar |
 | `Bridge health check failed` | Extension not running or wrong host/port | Ensure VS Code is open with a notebook and the bridge is active |
 | `ECONNREFUSED` | Wrong host or port | Verify `NSL_BRIDGE_HOST` and `NSL_BRIDGE_PORT` match the extension status bar |
-| `401 Unauthorized` | Token auth enabled but wrong/missing token | Set `NSL_BRIDGE_TOKEN` or disable token auth in extension settings |
+| `401 Unauthorized` | Wrong/missing auth token | Ensure the port file volume mount is correct (token is auto-discovered), or set `NSL_BRIDGE_TOKEN` explicitly |
 | Connection refused from Docker | Container cannot reach host | Use `--network=host` flag, and set `NSL_BRIDGE_HOST` to `host.docker.internal` |

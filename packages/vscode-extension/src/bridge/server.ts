@@ -2,8 +2,9 @@
  * Local loopback HTTP bridge server.
  *
  * Binds to 127.0.0.1 only with an ephemeral port.
- * Auth mode defaults to "none" (no token required for local loopback).
- * Token auth is available as an optional hardening mode.
+ * Token authentication is **always enabled** — a 256-bit ephemeral bearer
+ * token is generated at startup and written to the port file alongside the
+ * port number so that MCP clients can discover both automatically.
  * Accepts JSON-RPC 2.0 requests and dispatches to handlers.
  */
 import * as http from "http";
@@ -11,7 +12,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { handleRequest } from "./handlers.js";
-import { extractBearerToken, generateToken, validateToken, setAuthMode, isTokenAuthEnabled, invalidateToken } from "./auth.js";
+import { extractBearerToken, generateToken, validateToken, setAuthMode, invalidateToken } from "./auth.js";
 import { getLogger } from "../utils/logger.js";
 import { ErrorCode, createJsonRpcError, BRIDGE_PORT_FILE_DIR, BRIDGE_PORT_FILE_PATTERN, BRIDGE_PORT_FILE_MAX_AGE_MS } from "@notebook-session-labs/shared";
 import type { BridgeAuthMode } from "@notebook-session-labs/shared";
@@ -134,10 +135,19 @@ function writePortFile(info: BridgeServerInfo): void {
       port: info.port,
       host: info.host,
       pid: process.pid,
+      token: info.token,
       startedAt: new Date().toISOString(),
     };
     fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
-    log.info({ filePath, port: info.port }, "Bridge port file written");
+    // Restrict file permissions to owner-only (rw-------) since it contains
+    // the auth token. Other processes on the same machine that need access
+    // should use NSL_STATE_DIR with appropriate group/user permissions.
+    try {
+      fs.chmodSync(filePath, 0o600);
+    } catch {
+      // chmod may fail on some platforms — non-fatal
+    }
+    log.info({ filePath, port: info.port }, "Bridge port file written (with token)");
   } catch (err) {
     log.warn({ err }, "Failed to write bridge port file");
   }
@@ -166,11 +176,11 @@ export function startServer(
   port: number = 0,
   maxOutputSize: number = 100_000,
   includeImages: boolean = true,
-  authMode: BridgeAuthMode = "none",
+  authMode: BridgeAuthMode = "token",
 ): Promise<BridgeServerInfo> {
   return new Promise((resolve, reject) => {
     setAuthMode(authMode);
-    const token = isTokenAuthEnabled() ? generateToken() : null;
+    const token = generateToken();
 
     server = http.createServer(
       (req: http.IncomingMessage, res: http.ServerResponse) => {
@@ -261,20 +271,18 @@ async function handleHttpRequest(
     return;
   }
 
-  // Authenticate
-  if (isTokenAuthEnabled()) {
-    const authHeader = req.headers.authorization;
-    const token = extractBearerToken(authHeader);
-    if (!validateToken(token)) {
-      log.warn({ remoteAddress: req.socket.remoteAddress }, "Auth failed");
-      res.writeHead(401, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify(
-          createJsonRpcError(null, ErrorCode.BRIDGE_AUTH_FAILED, "Unauthorized"),
-        ),
-      );
-      return;
-    }
+  // Authenticate — token is always required
+  const authHeader = req.headers.authorization;
+  const token = extractBearerToken(authHeader);
+  if (!validateToken(token)) {
+    log.warn({ remoteAddress: req.socket.remoteAddress }, "Auth failed");
+    res.writeHead(401, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify(
+        createJsonRpcError(null, ErrorCode.BRIDGE_AUTH_FAILED, "Unauthorized"),
+      ),
+    );
+    return;
   }
 
   // Parse body
