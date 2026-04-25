@@ -38,9 +38,43 @@ code --install-extension notebook-session-labs-0.1.0.vsix
 | `notebookSessionLabs.output.maxSize` | `100000` | Max output size per cell (bytes) |
 | `notebookSessionLabs.output.includeImages` | `true` | Include image outputs |
 
+## Port Discovery
+
+When the bridge starts, it writes connection info to a **port file** so MCP clients (including Docker containers) can auto-discover the ephemeral port without manual configuration.
+
+**Port file location:**
+
+| Platform | Path |
+|----------|------|
+| Linux / macOS | `/tmp/notebook-session-labs/bridge-<pid>.json` |
+| Windows | `%TEMP%\notebook-session-labs\bridge-<pid>.json` |
+| Custom | Set `NSL_STATE_DIR` environment variable |
+
+Each VS Code window writes its own PID-scoped file, so multiple sessions coexist. Stale files from crashed sessions are cleaned up automatically.
+
 ## MCP Client Configuration
 
-### Node.js (local)
+### Node.js (local) — auto-discovery
+
+The MCP server reads the port file automatically when `NSL_BRIDGE_PORT` is not set:
+
+```json
+{
+  "servers": {
+    "notebook-session-labs": {
+      "command": "node",
+      "args": ["/path/to/notebook-session-labs/packages/mcp-server/dist/index.js"],
+      "env": {
+        "NSL_BRIDGE_HOST": "127.0.0.1"
+      }
+    }
+  }
+}
+```
+
+### Node.js (local) — explicit port
+
+If you set `notebookSessionLabs.bridge.port` to a fixed value:
 
 ```json
 {
@@ -50,14 +84,63 @@ code --install-extension notebook-session-labs-0.1.0.vsix
       "args": ["/path/to/notebook-session-labs/packages/mcp-server/dist/index.js"],
       "env": {
         "NSL_BRIDGE_HOST": "127.0.0.1",
-        "NSL_BRIDGE_PORT": "<port from status bar>"
+        "NSL_BRIDGE_PORT": "3838"
       }
     }
   }
 }
 ```
 
-### Docker
+### Docker (Linux / WSL)
+
+Mount the port file directory and the MCP server auto-discovers the port:
+
+```json
+{
+  "servers": {
+    "notebook-session-labs": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm", "--network=host",
+        "-v", "/tmp/notebook-session-labs:/tmp/notebook-session-labs",
+        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
+        "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+### Docker (Windows / PowerShell)
+
+The extension writes port files to `%TEMP%\notebook-session-labs\`. Mount that directory into the container:
+
+```powershell
+# In your MCP client config, use:
+"-v", "$env:TEMP\notebook-session-labs:/tmp/notebook-session-labs"
+```
+
+```json
+{
+  "servers": {
+    "notebook-session-labs": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm", "--network=host",
+        "-v", "C:\\Users\\<you>\\AppData\\Local\\Temp\\notebook-session-labs:/tmp/notebook-session-labs",
+        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
+        "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+> Replace `<you>` with your Windows username, or use `$env:TEMP\notebook-session-labs` in PowerShell.
+
+### Docker — explicit port
+
+If you use a fixed port (`notebookSessionLabs.bridge.port` in settings):
 
 ```json
 {
@@ -67,7 +150,7 @@ code --install-extension notebook-session-labs-0.1.0.vsix
       "args": [
         "run", "-i", "--rm", "--network=host",
         "-e", "NSL_BRIDGE_HOST=host.docker.internal",
-        "-e", "NSL_BRIDGE_PORT=3939",
+        "-e", "NSL_BRIDGE_PORT=3838",
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
       ]
     }

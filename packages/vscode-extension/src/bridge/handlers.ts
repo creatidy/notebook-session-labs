@@ -209,7 +209,6 @@ function handleReadCell(
   maxOutputSize: number,
   includeImages: boolean,
 ) {
-  const cellIndex = params.cellIndex as number;
   const notebookId = params.notebookId as string | undefined;
   const doc = notebookService.resolveNotebook(notebookId);
   if (!doc) {
@@ -220,6 +219,7 @@ function handleReadCell(
         : "No active notebook",
     );
   }
+  const cellIndex = resolveCellIndex(doc, params);
   if (cellIndex < 0 || cellIndex >= doc.cellCount) {
     throw new BridgeHandlerError(
       ErrorCode.INVALID_CELL_INDEX,
@@ -235,7 +235,6 @@ function handleReadCellOutput(
   maxOutputSize: number,
   includeImages: boolean,
 ) {
-  const cellIndex = params.cellIndex as number;
   const notebookId = params.notebookId as string | undefined;
   const doc = notebookService.resolveNotebook(notebookId);
   if (!doc) {
@@ -246,6 +245,7 @@ function handleReadCellOutput(
         : "No active notebook",
     );
   }
+  const cellIndex = resolveCellIndex(doc, params);
   if (cellIndex < 0 || cellIndex >= doc.cellCount) {
     throw new BridgeHandlerError(
       ErrorCode.INVALID_CELL_INDEX,
@@ -294,7 +294,6 @@ async function handleInsertCell(params: Record<string, unknown>) {
 
 async function handleReplaceCell(params: Record<string, unknown>) {
   const notebookId = params.notebookId as string | undefined;
-  const cellIndex = params.cellIndex as number;
   const source = params.source as string;
   const kind = params.kind as "code" | "markdown" | undefined;
   const language = params.language as string | undefined;
@@ -308,12 +307,12 @@ async function handleReplaceCell(params: Record<string, unknown>) {
         : "No active notebook",
     );
   }
+  const cellIndex = resolveCellIndex(doc, params);
   return notebookService.replaceCell(doc, cellIndex, source, kind, language);
 }
 
 async function handleEditCellSource(params: Record<string, unknown>) {
   const notebookId = params.notebookId as string | undefined;
-  const cellIndex = params.cellIndex as number;
   const source = params.source as string;
 
   const doc = notebookService.resolveNotebook(notebookId);
@@ -325,12 +324,12 @@ async function handleEditCellSource(params: Record<string, unknown>) {
         : "No active notebook",
     );
   }
+  const cellIndex = resolveCellIndex(doc, params);
   return notebookService.editCellSource(doc, cellIndex, source);
 }
 
 async function handleDeleteCell(params: Record<string, unknown>) {
   const notebookId = params.notebookId as string | undefined;
-  const cellIndex = params.cellIndex as number;
 
   const doc = notebookService.resolveNotebook(notebookId);
   if (!doc) {
@@ -341,6 +340,7 @@ async function handleDeleteCell(params: Record<string, unknown>) {
         : "No active notebook",
     );
   }
+  const cellIndex = resolveCellIndex(doc, params);
   await notebookService.deleteCell(doc, cellIndex);
   return { success: true, cellIndex };
 }
@@ -366,7 +366,6 @@ async function handleMoveCell(params: Record<string, unknown>) {
 
 async function handleExecuteCell(params: Record<string, unknown>) {
   const notebookId = params.notebookId as string | undefined;
-  const cellIndex = params.cellIndex as number;
   const timeoutMs = params.timeoutMs as number | undefined;
   const waitForCompletion = (params.waitForCompletion as boolean) ?? true;
 
@@ -379,6 +378,7 @@ async function handleExecuteCell(params: Record<string, unknown>) {
         : "No active notebook",
     );
   }
+  const cellIndex = resolveCellIndex(doc, params);
   return notebookService.executeCell(doc, cellIndex, timeoutMs, waitForCompletion);
 }
 
@@ -430,7 +430,6 @@ async function handleSaveNotebook(params: Record<string, unknown>) {
 
 async function handleClearCellOutputs(params: Record<string, unknown>) {
   const notebookId = params.notebookId as string | undefined;
-  const cellIndex = params.cellIndex as number;
 
   const doc = notebookService.resolveNotebook(notebookId);
   if (!doc) {
@@ -441,6 +440,7 @@ async function handleClearCellOutputs(params: Record<string, unknown>) {
         : "No active notebook",
     );
   }
+  const cellIndex = resolveCellIndex(doc, params);
   return notebookService.clearCellOutputs(doc, cellIndex);
 }
 
@@ -457,6 +457,43 @@ async function handleClearAllOutputs(params: Record<string, unknown>) {
     );
   }
   return notebookService.clearAllOutputs(doc);
+}
+
+// ── Cell ID resolution (P6) ──
+
+/**
+ * Resolve a cell index from params that may contain either `cellIndex` or `cellId`.
+ * If `cellIndex` is provided, it takes precedence.
+ * If only `cellId` is provided, looks up the cell by its stable ID.
+ * Throws if neither is provided or if the cell cannot be found.
+ */
+function resolveCellIndex(
+  doc: ReturnType<typeof notebookService.resolveNotebook> & object,
+  params: Record<string, unknown>,
+): number {
+  const { cellIndex, cellId: cellIdParam } = params;
+
+  // cellIndex takes precedence
+  if (typeof cellIndex === "number") {
+    return cellIndex;
+  }
+
+  // Try cellId lookup
+  if (typeof cellIdParam === "string" && cellIdParam.length > 0) {
+    const idx = notebookService.findCellIndexById(doc, cellIdParam);
+    if (idx === null) {
+      throw new BridgeHandlerError(
+        ErrorCode.CELL_NOT_FOUND,
+        `Cell not found with id: ${cellIdParam}`,
+      );
+    }
+    return idx;
+  }
+
+  throw new BridgeHandlerError(
+    ErrorCode.INVALID_PARAMS,
+    "Either cellIndex or cellId is required",
+  );
 }
 
 // ── Error class ──

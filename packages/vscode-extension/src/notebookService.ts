@@ -6,7 +6,7 @@
  * touch VS Code APIs directly.
  */
 import * as vscode from "vscode";
-import { createHash } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import { getLogger } from "./utils/logger.js";
 import type {
   NotebookSummary,
@@ -27,6 +27,18 @@ import {
 
 const log = getLogger();
 
+// ── Stable Cell ID (P3) ──
+
+/** Metadata key used to persist stable cell IDs across cell replacements */
+const NSL_CELL_ID_META_KEY = "nslCellId";
+
+/**
+ * Generate a random stable cell ID (32-char hex).
+ */
+function randomCellId(): string {
+  return randomBytes(16).toString("hex");
+}
+
 /**
  * Generate a stable ID for a notebook document.
  * Uses SHA-256 hash of the URI to avoid collisions from shared prefixes.
@@ -36,13 +48,205 @@ function notebookId(doc: vscode.NotebookDocument): string {
 }
 
 /**
- * Generate a stable ID for a cell.
- * Uses SHA-256 hash of the cell URI to guarantee uniqueness
- * even when cell URIs share long common prefixes.
+ * Get the stable ID for a cell.
+ * Checks metadata first for the persisted nslCellId; falls back to URI hash
+ * for legacy cells that were created before stable IDs were introduced.
  */
 export function cellId(cell: vscode.NotebookCell): string {
+  const meta = cell.metadata as Record<string, unknown> | undefined;
+  const metaId = meta?.[NSL_CELL_ID_META_KEY];
+  if (typeof metaId === "string" && metaId.length > 0) {
+    return metaId;
+  }
+  // Legacy fallback: hash of cell URI (not stable across replacements)
   return createHash("sha256").update(cell.document.uri.toString()).digest("hex").slice(0, 32);
 }
+
+// ── Execution Monitor (P4 — Event-Driven Execution Monitoring) ──
+
+interface CellExecutionCompletion {
+  cellIndex: number;
+  success: boolean;
+  executionOrder: number | undefined;
+}
+
+/**
+ * Tracks cell execution state changes via VS Code's
+ * `onDidChangeNotebookCellExecutionState` event. Provides event-driven
+ * alternatives to polling for execution completion.
+ */
+class ExecutionMonitor implements vscode.Disposable {
+  private _subscription: vscode.Disposable;
+  /** notebook URI → (cell index → completion resolver queue) */
+  private _pendingCells = new Map<string, Map<number, Array<(r: CellExecutionCompletion) => void>>>();
+  /** notebook URI → timestamp of most recent execution-start */
+  private _activeNotebooks = new Map<string, number>();
+  private _disposed = false;
+  /** Whether the proposed API is available */
+  private _hasEventApi: boolean;
+
+  constructor() {
+    // onDidChangeNotebookCellExecutionState is a proposed API and may not
+    // be available in all VS Code versions. Guard against its absence.
+    if (typeof vscode.notebooks.onDidChangeNotebookCellExecutionState === "function") {
+      this._hasEventApi = true;
+      this._subscription = vscode.notebooks.onDidChangeNotebookCellExecutionState(
+        this._onStateChange.bind(this),
+      );
+    } else {
+      this._hasEventApi = false;
+      this._subscription = { dispose() { /* noop */ } };
+    }
+  }
+
+  // ---- private helpers ----
+
+  private _nbKey(doc: vscode.NotebookDocument): string {
+    return doc.uri.toString();
+  }
+
+  private _onStateChange(
+    event: vscode.NotebookCellExecutionStateChangeEvent,
+  ): void {
+    if (this._disposed) return;
+
+    const { cell, state } = event;
+    const doc = cell.notebook;
+    const nbKey = this._nbKey(doc);
+    const idx = cell.index;
+
+    // Track that this notebook has a working kernel
+    if (state === vscode.NotebookCellExecutionState.Executing) {
+      this._activeNotebooks.set(nbKey, Date.now());
+    }
+
+    // When cell transitions to Idle, resolve pending promises
+    if (state === vscode.NotebookCellExecutionState.Idle) {
+      const cellMap = this._pendingCells.get(nbKey);
+      if (!cellMap) return;
+      const resolvers = cellMap.get(idx);
+      if (!resolvers) return;
+
+      cellMap.delete(idx);
+      if (cellMap.size === 0) this._pendingCells.delete(nbKey);
+
+      const result: CellExecutionCompletion = {
+        cellIndex: idx,
+        success: cell.executionSummary?.success ?? true,
+        executionOrder: cell.executionSummary?.executionOrder,
+      };
+      for (const resolve of resolvers) {
+        resolve(result);
+      }
+    }
+  }
+
+  // ---- public API ----
+
+  /**
+   * Whether the event-driven API is available.
+   */
+  get hasEventApi(): boolean {
+    return this._hasEventApi;
+  }
+
+  /**
+   * Return a Promise that resolves when the given cell finishes executing,
+   * or rejects after `timeoutMs`.
+   */
+  waitForCellCompletion(
+    doc: vscode.NotebookDocument,
+    cellIndex: number,
+    timeoutMs: number,
+  ): Promise<CellExecutionCompletion> {
+    // If the event API is not available, return immediately with a placeholder
+    if (!this._hasEventApi) {
+      return Promise.resolve({
+        cellIndex,
+        success: true,
+        executionOrder: undefined,
+      });
+    }
+
+    return new Promise((resolve) => {
+      const nbKey = this._nbKey(doc);
+      let cellMap = this._pendingCells.get(nbKey);
+      if (!cellMap) {
+        cellMap = new Map();
+        this._pendingCells.set(nbKey, cellMap);
+      }
+      let resolvers = cellMap.get(cellIndex);
+      if (!resolvers) {
+        resolvers = [];
+        cellMap.set(cellIndex, resolvers);
+      }
+
+      // Timeout fallback
+      const timer = setTimeout(() => {
+        // Remove this resolver from the queue
+        const current = this._pendingCells.get(nbKey)?.get(cellIndex);
+        if (current) {
+          const pos = current.indexOf(resolve);
+          if (pos >= 0) current.splice(pos, 1);
+          if (current.length === 0) {
+            this._pendingCells.get(nbKey)?.delete(cellIndex);
+          }
+        }
+        resolve({
+          cellIndex,
+          success: false,
+          executionOrder: undefined,
+        });
+      }, timeoutMs);
+
+      // Wrap resolve to clear the timeout
+      const wrappedResolve = (r: CellExecutionCompletion) => {
+        clearTimeout(timer);
+        resolve(r);
+      };
+      resolvers.push(wrappedResolve);
+    });
+  }
+
+  /**
+   * Whether the notebook has ever been observed executing a cell.
+   * Used to infer kernel availability.
+   */
+  hasKernelActivity(doc: vscode.NotebookDocument): boolean {
+    return this._activeNotebooks.has(this._nbKey(doc));
+  }
+
+  dispose(): void {
+    this._disposed = true;
+    this._subscription.dispose();
+    this._pendingCells.clear();
+    this._activeNotebooks.clear();
+  }
+}
+
+// Module-level singleton
+let _executionMonitor: ExecutionMonitor | null = null;
+
+/**
+ * Initialise the shared execution monitor.
+ * Call once during extension activation; returns the Disposable.
+ */
+export function initExecutionMonitor(): vscode.Disposable {
+  _executionMonitor = new ExecutionMonitor();
+  log.info("Execution monitor initialized");
+  return _executionMonitor;
+}
+
+function getExecutionMonitor(): ExecutionMonitor {
+  if (!_executionMonitor) {
+    // Auto-init safety net
+    _executionMonitor = new ExecutionMonitor();
+    log.warn("Execution monitor auto-initialized (should be initialised during activation)");
+  }
+  return _executionMonitor;
+}
+
+// ── Cell execution status inference ──
 
 /**
  * Map a cell's execution summary to our execution status.
@@ -75,15 +279,20 @@ const VSCODE_INTERNAL_ERROR_MIME = "application/vnd.code.notebook.error";
 
 /**
  * Detect kernel status for a notebook.
- * Checks execution history to infer if a kernel is available.
+ * Uses the execution monitor for accurate detection; falls back to
+ * execution-history inference for legacy cells.
  */
 function getKernelStatus(
   doc: vscode.NotebookDocument,
 ): "idle" | "busy" | "unknown" {
+  const monitor = getExecutionMonitor();
+  if (monitor.hasKernelActivity(doc)) {
+    return "idle";
+  }
+  // Legacy fallback: check execution history
   for (let i = 0; i < doc.cellCount; i++) {
     const cell = doc.cellAt(i);
     if (cell.executionSummary?.executionOrder !== undefined) {
-      // At least one cell has been executed, so a kernel was available
       return "idle";
     }
   }
@@ -415,6 +624,23 @@ export function resolveNotebook(
 }
 
 /**
+ * Find a cell index by its stable ID within a notebook.
+ * Returns null if no cell matches.
+ */
+export function findCellIndexById(
+  doc: vscode.NotebookDocument,
+  id: string,
+): number | null {
+  for (let i = 0; i < doc.cellCount; i++) {
+    const cell = doc.cellAt(i);
+    if (cellId(cell) === id) {
+      return i;
+    }
+  }
+  return null;
+}
+
+/**
  * Insert a new cell into a notebook.
  */
 export async function insertCell(
@@ -436,7 +662,7 @@ export async function insertCell(
     : "markdown";
 
   const newCell = new vscode.NotebookCellData(cellKind, source, cellLanguage);
-  newCell.metadata = {};
+  newCell.metadata = { [NSL_CELL_ID_META_KEY]: randomCellId() };
 
   wsEdit.set(
     doc.uri,
@@ -479,7 +705,13 @@ export async function replaceCell(
 
   const wsEdit = new vscode.WorkspaceEdit();
   const newCell = new vscode.NotebookCellData(cellKind, source, cellLanguage);
-  newCell.metadata = existingCell.metadata as Record<string, unknown> ?? {};
+  // Preserve existing metadata and ensure stable ID is kept
+  const existingMeta = (existingCell.metadata as Record<string, unknown>) ?? {};
+  newCell.metadata = {
+    ...existingMeta,
+    // Keep existing nslCellId, or generate a new one if somehow missing
+    [NSL_CELL_ID_META_KEY]: (existingMeta[NSL_CELL_ID_META_KEY] as string) || randomCellId(),
+  };
 
   wsEdit.set(
     doc.uri,
@@ -556,12 +788,17 @@ export async function clearCellOutputs(
     return getCellDetail(cell, cellIndex);
   }
 
+  const existingMeta = (cell.metadata as Record<string, unknown>) ?? {};
   const cellData = new vscode.NotebookCellData(
     cell.kind,
     cell.document.getText(),
     cell.document.languageId,
   );
-  cellData.metadata = cell.metadata as Record<string, unknown> ?? {};
+  // Preserve metadata including stable ID
+  cellData.metadata = {
+    ...existingMeta,
+    [NSL_CELL_ID_META_KEY]: (existingMeta[NSL_CELL_ID_META_KEY] as string) || randomCellId(),
+  };
   // No outputs — cleared
 
   const wsEdit = new vscode.WorkspaceEdit();
@@ -588,12 +825,17 @@ export async function clearAllOutputs(
   for (let i = 0; i < doc.cellCount; i++) {
     const cell = doc.cellAt(i);
     if (cell.outputs.length > 0) {
+      const existingMeta = (cell.metadata as Record<string, unknown>) ?? {};
       const cellData = new vscode.NotebookCellData(
         cell.kind,
         cell.document.getText(),
         cell.document.languageId,
       );
-      cellData.metadata = cell.metadata as Record<string, unknown> ?? {};
+      // Preserve metadata including stable ID
+      cellData.metadata = {
+        ...existingMeta,
+        [NSL_CELL_ID_META_KEY]: (existingMeta[NSL_CELL_ID_META_KEY] as string) || randomCellId(),
+      };
 
       const wsEdit = new vscode.WorkspaceEdit();
       wsEdit.set(
@@ -633,12 +875,17 @@ export async function moveCell(
   }
 
   const cell = doc.cellAt(fromIndex);
+  const existingMeta = (cell.metadata as Record<string, unknown>) ?? {};
   const cellData = new vscode.NotebookCellData(
     cell.kind,
     cell.document.getText(),
     cell.document.languageId,
   );
-  cellData.metadata = cell.metadata as Record<string, unknown> ?? {};
+  // Preserve metadata including stable ID
+  cellData.metadata = {
+    ...existingMeta,
+    [NSL_CELL_ID_META_KEY]: (existingMeta[NSL_CELL_ID_META_KEY] as string) || randomCellId(),
+  };
   cellData.outputs = cell.outputs.map(
     (o) => new vscode.NotebookCellOutput(o.items),
   );
@@ -668,6 +915,9 @@ export async function moveCell(
 
 /**
  * Execute a single cell.
+ *
+ * Uses event-driven monitoring via `ExecutionMonitor` to detect completion,
+ * with a polling fallback for robustness.
  */
 export async function executeCell(
   doc: vscode.NotebookDocument,
@@ -696,7 +946,6 @@ export async function executeCell(
     );
 
     if (waitForCompletion) {
-      // Wait for execution to complete by polling cell state
       const timeout = timeoutMs || 60_000;
       const result = await waitForCellCompletion(
         doc,
@@ -733,6 +982,8 @@ export async function executeCell(
 
 /**
  * Run all cells in a notebook and wait for completion.
+ *
+ * Uses event-driven monitoring via `ExecutionMonitor` with a polling fallback.
  */
 export async function runAllCells(
   doc: vscode.NotebookDocument,
@@ -763,11 +1014,23 @@ export async function runAllCells(
     doc.uri,
   );
 
-  // Poll for completion of all code cells
+  // Event-driven wait with polling fallback
+  const monitor = getExecutionMonitor();
   const deadline = startTime + timeout;
   const pollInterval = 500;
   const completed = new Set<number>();
 
+  // Set up event-driven completion listeners
+  const completionPromises = new Map<number, Promise<CellExecutionCompletion>>();
+  for (const idx of codeCellIndices) {
+    const remaining = Math.max(deadline - Date.now(), 1000);
+    completionPromises.set(
+      idx,
+      monitor.waitForCellCompletion(doc, idx, remaining),
+    );
+  }
+
+  // Poll as fallback, also check event-driven completions
   while (Date.now() < deadline && completed.size < codeCellIndices.length) {
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
@@ -787,7 +1050,6 @@ export async function runAllCells(
   for (const idx of codeCellIndices) {
     const cell = doc.cellAt(idx);
     const currentOrder = cell.executionSummary?.executionOrder;
-    const previousOrder = previousOrders.get(idx);
     const didComplete = completed.has(idx);
 
     if (didComplete) {
@@ -842,7 +1104,10 @@ export async function saveNotebook(
 // ── Internal helpers ──
 
 /**
- * Wait for a cell execution to complete by polling.
+ * Wait for a cell execution to complete.
+ *
+ * Uses the event-driven ExecutionMonitor as primary mechanism,
+ * with polling as a safety fallback.
  */
 async function waitForCellCompletion(
   doc: vscode.NotebookDocument,
@@ -854,9 +1119,18 @@ async function waitForCellCompletion(
   const cell = doc.cellAt(cellIndex);
   const deadline = startTime + timeoutMs;
   const pollInterval = 500;
-  const kernelGracePeriod = 3_000; // Wait 3s to detect if kernel starts
+  const kernelGracePeriod = 10_000; // 10s grace for kernel to start (P1: extended from 3s)
   const kernelCheckTime = startTime + kernelGracePeriod;
   let kernelCheckDone = false;
+
+  // Set up event-driven completion
+  const monitor = getExecutionMonitor();
+  const eventTimeout = Math.min(timeoutMs, deadline - Date.now());
+  const eventPromise = monitor.waitForCellCompletion(doc, cellIndex, eventTimeout);
+  let eventResolved = false;
+  void eventPromise.then((result) => {
+    eventResolved = true;
+  });
 
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -886,15 +1160,20 @@ async function waitForCellCompletion(
     if (!kernelCheckDone && Date.now() >= kernelCheckTime) {
       kernelCheckDone = true;
       if (currentExecutionOrder === previousExecutionOrder) {
-        // Execution order hasn't changed — kernel likely not available
-        return {
-          cellId: cellId(cell),
-          status: "failed",
-          executionCount: null,
-          outputs: [],
-          durationMs: Date.now() - startTime,
-          error: "Kernel not available or execution did not start. Ensure a notebook kernel is selected.",
-        };
+        // Execution order hasn't changed — check event monitor for any activity
+        if (!monitor.hasKernelActivity(doc)) {
+          // No kernel activity detected — kernel likely not connected
+          return {
+            cellId: cellId(cell),
+            status: "failed",
+            executionCount: null,
+            outputs: [],
+            durationMs: Date.now() - startTime,
+            error: "Kernel not available or execution did not start. Ensure a notebook kernel is selected.",
+          };
+        }
+        // Kernel has been active before but this execution didn't start —
+        // keep waiting, the kernel may just be slow to reconnect
       }
     }
   }

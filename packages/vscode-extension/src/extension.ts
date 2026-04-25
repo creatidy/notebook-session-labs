@@ -9,6 +9,7 @@ import { initLogger, getLogger, disposeLogger, showOutputChannel } from "./utils
 import { startServer, stopServer, type BridgeServerInfo } from "./bridge/server.js";
 import { DEFAULT_BRIDGE_HOST, DEFAULT_BRIDGE_PORT, DEFAULT_MAX_OUTPUT_SIZE, DEFAULT_BRIDGE_AUTH_MODE } from "@notebook-session-labs/shared";
 import type { BridgeAuthMode } from "@notebook-session-labs/shared";
+import { initExecutionMonitor } from "./notebookService.js";
 
 let statusBarItem: vscode.StatusBarItem;
 let currentBridgeInfo: BridgeServerInfo | null = null;
@@ -33,6 +34,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   statusBarItem.command = "notebookSessionLabs.showBridgeStatus";
   updateStatusBar(false);
   statusBarItem.show();
+
+  // Initialize execution monitor for event-driven cell tracking
+  context.subscriptions.push(initExecutionMonitor());
 
   // Register commands
   context.subscriptions.push(

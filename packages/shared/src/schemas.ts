@@ -147,12 +147,14 @@ export const ReadNotebookParamsSchema = z.object({
 });
 
 export const ReadCellParamsSchema = z.object({
-  cellIndex: z.number().int().nonnegative(),
+  cellIndex: z.number().int().nonnegative().optional(),
+  cellId: CellIdSchema.optional(),
   notebookId: NotebookIdSchema.optional(),
 });
 
 export const ReadCellOutputParamsSchema = z.object({
-  cellIndex: z.number().int().nonnegative(),
+  cellIndex: z.number().int().nonnegative().optional(),
+  cellId: CellIdSchema.optional(),
   notebookId: NotebookIdSchema.optional(),
 });
 
@@ -168,7 +170,8 @@ export const InsertCellParamsSchema = z.object({
 
 export const ReplaceCellParamsSchema = z.object({
   notebookId: NotebookIdSchema.optional(),
-  cellIndex: z.number().int().nonnegative(),
+  cellIndex: z.number().int().nonnegative().optional(),
+  cellId: CellIdSchema.optional(),
   source: z.string(),
   kind: CellKindSchema.optional(),
   language: z.string().optional(),
@@ -176,13 +179,15 @@ export const ReplaceCellParamsSchema = z.object({
 
 export const EditCellSourceParamsSchema = z.object({
   notebookId: NotebookIdSchema.optional(),
-  cellIndex: z.number().int().nonnegative(),
+  cellIndex: z.number().int().nonnegative().optional(),
+  cellId: CellIdSchema.optional(),
   source: z.string(),
 });
 
 export const DeleteCellParamsSchema = z.object({
   notebookId: NotebookIdSchema.optional(),
-  cellIndex: z.number().int().nonnegative(),
+  cellIndex: z.number().int().nonnegative().optional(),
+  cellId: CellIdSchema.optional(),
 });
 
 export const MoveCellParamsSchema = z.object({
@@ -193,7 +198,8 @@ export const MoveCellParamsSchema = z.object({
 
 export const ExecuteCellParamsSchema = z.object({
   notebookId: NotebookIdSchema.optional(),
-  cellIndex: z.number().int().nonnegative(),
+  cellIndex: z.number().int().nonnegative().optional(),
+  cellId: CellIdSchema.optional(),
   timeoutMs: z.number().int().positive().optional(),
   waitForCompletion: z.boolean().default(true),
 });
@@ -212,7 +218,8 @@ export const SaveNotebookParamsSchema = z.object({
 });
 
 export const ClearCellOutputsParamsSchema = z.object({
-  cellIndex: z.number().int().nonnegative(),
+  cellIndex: z.number().int().nonnegative().optional(),
+  cellId: CellIdSchema.optional(),
   notebookId: NotebookIdSchema.optional(),
 });
 

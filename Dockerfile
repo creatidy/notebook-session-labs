@@ -32,6 +32,7 @@ LABEL org.opencontainers.image.source="https://github.com/creatidy/notebook-sess
 LABEL org.opencontainers.image.description="MCP server for Notebook Session Labs — bridges to VS Code notebook sessions"
 LABEL org.opencontainers.image.licenses="MIT"
 
+
 WORKDIR /app
 
 # Copy production node_modules and built dist
@@ -48,6 +49,12 @@ ENV NSL_BRIDGE_HOST=127.0.0.1
 ENV NSL_BRIDGE_PORT=""
 ENV NSL_LOG_LEVEL=info
 
+# Entrypoint: ensure the shared port file directory exists with correct permissions
+# (world-writable + sticky bit, like /tmp) so both Docker and the extension can
+# read/write regardless of who created it first.
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 WORKDIR /app/packages/mcp-server
 
-CMD ["node", "dist/index.js"]
+ENTRYPOINT ["docker-entrypoint.sh"]

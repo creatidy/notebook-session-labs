@@ -1,7 +1,7 @@
 {
   "name": "notebook-session-labs",
   "displayName": "Notebook Session Labs",
-  "description": "A local bridge for live notebook sessions inside VS Code",
+  "description": "A local bridge for live notebook sessions inside VS Code. Exposes notebook operations through a loopback HTTP bridge with auto-discovered ephemeral port — works with MCP clients and Docker containers.",
   "version": "0.2.0",
   "type": "module",
   "license": "MIT",

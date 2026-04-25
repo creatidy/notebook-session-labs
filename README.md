@@ -55,21 +55,49 @@ export NSL_BRIDGE_TOKEN=<token from extension>
 pnpm --filter @notebook-session-labs/mcp-server start
 ```
 
-The MCP server is also available as a Docker image from GHCR:
+The MCP server is also available as a Docker image from GHCR. The bridge auto-discovers the ephemeral port via a port file — no manual port configuration needed.
+
+### Run with Docker (Linux / WSL)
 
 ```bash
 docker run -i --rm --network=host \
+  -v /tmp/notebook-session-labs:/tmp/notebook-session-labs \
   -e NSL_BRIDGE_HOST=host.docker.internal \
-  -e NSL_BRIDGE_PORT=<port> \
-  -e NSL_BRIDGE_TOKEN=<token> \
   ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
+
+### Run with Docker (Windows / PowerShell)
+
+```powershell
+docker run -i --rm --network=host `
+  -v "$env:TEMP\notebook-session-labs:/tmp/notebook-session-labs" `
+  -e NSL_BRIDGE_HOST=host.docker.internal `
+  ghcr.io/creatidy/notebook-session-labs-mcp:latest
+```
+
+> **Note:** The extension writes port files to `/tmp/notebook-session-labs/` on Linux/macOS and `%TEMP%\notebook-session-labs\` on Windows. The Docker container reads them from the same path via a bind mount — no user-specific paths or `${HOME}` expansion needed.
 
 See [llms-installation.md](llms-installation.md) for full installation options.
 
 ### Configure an MCP Client
 
-Example configuration for VS Code MCP settings:
+**Auto-discovery (recommended)** — the port is read from the port file written by the extension:
+
+```json
+{
+  "servers": {
+    "notebook-session-labs": {
+      "command": "node",
+      "args": ["packages/mcp-server/dist/index.js"],
+      "env": {
+        "NSL_BRIDGE_HOST": "127.0.0.1"
+      }
+    }
+  }
+}
+```
+
+**Explicit port** — if you set `notebookSessionLabs.bridge.port` to a fixed value in VS Code settings:
 
 ```json
 {
@@ -79,7 +107,7 @@ Example configuration for VS Code MCP settings:
       "args": ["packages/mcp-server/dist/index.js"],
       "env": {
         "NSL_BRIDGE_HOST": "127.0.0.1",
-        "NSL_BRIDGE_PORT": "<port>",
+        "NSL_BRIDGE_PORT": "3838",
         "NSL_BRIDGE_TOKEN": "<token>"
       }
     }

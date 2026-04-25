@@ -13,7 +13,7 @@ The MCP server uses these environment variables at startup:
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `NSL_BRIDGE_HOST` | No | Bridge host (default: `127.0.0.1`) |
-| `NSL_BRIDGE_PORT` | Yes | Port shown in VS Code status bar |
+| `NSL_BRIDGE_PORT` | No | Port shown in VS Code status bar (auto-discovered from port files if not set) |
 | `NSL_BRIDGE_TOKEN` | No | Token for auth when `authMode` is `"token"` (not needed by default) |
 | `NSL_LOG_LEVEL` | No | Log level: `debug`, `info`, `warn`, `error` (default: `info`) |
 
@@ -37,14 +37,27 @@ node packages/mcp-server/dist/index.js
 
 ## Option 2: Docker
 
+The MCP server can auto-discover the bridge port from port files written by the extension. Mount the port file directory into the container:
+
+**Linux / WSL:**
+
 ```bash
 docker run -i --rm --network=host \
+  -v /tmp/notebook-session-labs:/tmp/notebook-session-labs \
   -e NSL_BRIDGE_HOST=host.docker.internal \
-  -e NSL_BRIDGE_PORT=<port> \
   ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
 
-When using Docker, set `NSL_BRIDGE_HOST` to `host.docker.internal` (or the Docker host IP) so the container can reach the VS Code bridge on the host. The `--network=host` flag allows the container to access the host network directly, which simplifies connectivity to the loopback bridge.
+**Windows (PowerShell):**
+
+```powershell
+docker run -i --rm --network=host `
+  -v "$env:TEMP\notebook-session-labs:/tmp/notebook-session-labs" `
+  -e NSL_BRIDGE_HOST=host.docker.internal `
+  ghcr.io/creatidy/notebook-session-labs-mcp:latest
+```
+
+No `NSL_BRIDGE_PORT` needed — the MCP server reads the port from the mounted port files automatically. Set `NSL_BRIDGE_HOST` to `host.docker.internal` (or the Docker host IP) so the container can reach the VS Code bridge on the host. The `--network=host` flag allows the container to access the host network directly.
 
 The Docker image is published to GHCR: `ghcr.io/creatidy/notebook-session-labs-mcp`.
 
@@ -69,7 +82,9 @@ Add to your MCP server configuration:
 }
 ```
 
-### Docker-based MCP Client
+### Docker-based MCP Client (Linux / WSL)
+
+Mount the port file directory — the MCP server auto-discovers the port:
 
 ```json
 {
@@ -78,14 +93,28 @@ Add to your MCP server configuration:
       "command": "docker",
       "args": [
         "run", "-i", "--rm", "--network=host",
-        "-e", "NSL_BRIDGE_HOST",
-        "-e", "NSL_BRIDGE_PORT",
+        "-v", "/tmp/notebook-session-labs:/tmp/notebook-session-labs",
+        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
-      ],
-      "env": {
-        "NSL_BRIDGE_HOST": "host.docker.internal",
-        "NSL_BRIDGE_PORT": "<port from extension>"
-      }
+      ]
+    }
+  }
+}
+```
+
+### Docker-based MCP Client (Windows / PowerShell)
+
+```json
+{
+  "servers": {
+    "notebook-session-labs": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm", "--network=host",
+        "-v", "C:\\Users\\<you>\\AppData\\Local\\Temp\\notebook-session-labs:/tmp/notebook-session-labs",
+        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
+        "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
+      ]
     }
   }
 }
@@ -102,14 +131,12 @@ If you set `notebookSessionLabs.bridge.authMode` to `"token"`, include `NSL_BRID
       "command": "docker",
       "args": [
         "run", "-i", "--rm", "--network=host",
-        "-e", "NSL_BRIDGE_HOST",
-        "-e", "NSL_BRIDGE_PORT",
+        "-v", "/tmp/notebook-session-labs:/tmp/notebook-session-labs",
+        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
         "-e", "NSL_BRIDGE_TOKEN",
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
       ],
       "env": {
-        "NSL_BRIDGE_HOST": "host.docker.internal",
-        "NSL_BRIDGE_PORT": "<port from extension>",
         "NSL_BRIDGE_TOKEN": "<token from extension>"
       }
     }
@@ -121,9 +148,8 @@ If you set `notebookSessionLabs.bridge.authMode` to `"token"`, include `NSL_BRID
 
 1. Install and activate the VS Code extension (Notebook Session Labs)
 2. Open a notebook (`.ipynb`) in VS Code
-3. Check the status bar for the bridge port
-4. Set `NSL_BRIDGE_PORT` in your MCP client config
-5. Start the MCP server through your client
+3. The extension writes a port file automatically — no manual port copy needed for Docker
+4. Start the MCP server through your client (port is auto-discovered)
 
 ## Common Failure Modes
 

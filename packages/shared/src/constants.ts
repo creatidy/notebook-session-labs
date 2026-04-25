@@ -52,6 +52,18 @@ export const SUPPORTED_OUTPUT_MIMES = [
   "application/vnd.code.notebook.error",
 ] as const;
 
+/** Default directory for bridge port files */
+export const BRIDGE_STATE_DIR = "notebook-session-labs";
+
+/** Default directory for bridge port files on Linux/macOS and inside Docker containers */
+export const BRIDGE_PORT_FILE_DIR = "/tmp/notebook-session-labs";
+
+/** Filename pattern for bridge port files (within state dir). One per VS Code session. */
+export const BRIDGE_PORT_FILE_PATTERN = /^bridge-(\d+)\.json$/;
+
+/** Maximum age (ms) for a port file before it's considered stale (1 hour) */
+export const BRIDGE_PORT_FILE_MAX_AGE_MS = 60 * 60 * 1000;
+
 /** Bridge method names */
 export const BRIDGE_METHODS = {
   // Session / Discovery

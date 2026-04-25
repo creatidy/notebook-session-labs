@@ -102,13 +102,66 @@ The local bridge uses **loopback HTTP** rather than IPC or named pipes. This dec
 
 ## Docker Networking
 
-When running the MCP server in Docker, the container needs to reach the VS Code bridge on the host. Use `--network=host` to share the host's network stack directly:
+When running the MCP server in Docker, the container needs to reach the VS Code bridge on the host. Use `--network=host` to share the host's network stack directly.
+
+### Port Discovery
+
+The bridge server writes its connection info to a **PID-scoped port file** at startup and removes it on shutdown. This allows the MCP server in Docker to auto-discover the ephemeral port without manual configuration.
+
+**Port file location:**
+
+| Platform | Path |
+|----------|------|
+| Linux / macOS | `/tmp/notebook-session-labs/bridge-<pid>.json` |
+| Windows | `%TEMP%\notebook-session-labs\bridge-<pid>.json` |
+| Custom | Set `NSL_STATE_DIR` environment variable |
+
+Each VS Code window writes its own file (`bridge-12345.json`), so multiple concurrent sessions coexist without conflicts.
+
+**Port file contents:**
+```json
+{
+  "port": 45321,
+  "host": "127.0.0.1",
+  "pid": 12345,
+  "startedAt": "2025-01-15T10:30:00.000Z"
+}
+```
+
+**Discovery order** (MCP server):
+1. `NSL_BRIDGE_PORT` env var (explicit, highest priority)
+2. Scan port files in `NSL_STATE_DIR` → pick the most recently modified valid one
+3. Scan port files in `/tmp/notebook-session-labs/` (default)
+
+### Crash Recovery
+
+If VS Code crashes, the port file is left behind. Two mechanisms handle this:
+
+1. **Stale cleanup on startup**: When any VS Code session starts a new bridge, it scans the state directory and removes port files whose PID no longer exists or whose age exceeds 1 hour.
+2. **MCP server picks latest**: The Docker container scans all `bridge-*.json` files and picks the most recently modified one with a valid port. If the picked bridge is dead, the health check fails gracefully.
+
+### Recommended Docker Config
+
+**Linux / WSL:**
 
 ```bash
 docker run -i --rm --network=host \
+  -v /tmp/notebook-session-labs:/tmp/notebook-session-labs \
   -e NSL_BRIDGE_HOST=host.docker.internal \
-  -e NSL_BRIDGE_PORT=<port> \
   ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
 
-The `-i` flag keeps stdin open for the stdio-based MCP transport. Without `--network=host`, the container may not be able to connect to the loopback bridge depending on the platform's Docker networking configuration.
+**Windows (PowerShell):**
+
+```powershell
+docker run -i --rm --network=host `
+  -v "$env:TEMP\notebook-session-labs:/tmp/notebook-session-labs" `
+  -e NSL_BRIDGE_HOST=host.docker.internal `
+  ghcr.io/creatidy/notebook-session-labs-mcp:latest
+```
+
+The extension writes port files to `/tmp/notebook-session-labs/` on Linux/macOS and `%TEMP%\notebook-session-labs\` on Windows. The bind mount mirrors the host's port files into the container, where the MCP server auto-discovers them — no `NSL_STATE_DIR` or `NSL_BRIDGE_PORT` needed. The `-i` flag keeps stdin open for the stdio-based MCP transport. Without `--network=host`, the container may not be able to connect to the loopback bridge depending on the platform's Docker networking configuration.
+
+### Multiple VS Code Sessions
+
+Each VS Code window writes its own PID-scoped port file (`bridge-<pid>.json`), so multiple sessions coexist without overwriting each other. The Docker container picks the **most recently modified** valid port file. For explicit targeting of a specific session, set `NSL_BRIDGE_PORT` to that session's port.

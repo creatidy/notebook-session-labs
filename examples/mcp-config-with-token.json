@@ -1,5 +1,5 @@
 {
-  "_comment": "Advanced config with token auth enabled. Use this when notebookSessionLabs.bridge.authMode is set to 'token' in VS Code settings.",
+  "_comment": "Advanced config with token auth enabled. Use this when notebookSessionLabs.bridge.authMode is set to 'token' in VS Code settings. The port is auto-discovered via the port file volume mount.",
   "mcpServers": {
     "notebook-session-labs": {
       "command": "docker",
@@ -8,9 +8,12 @@
         "-i",
         "--rm",
         "--network=host",
-        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
-        "-e", "NSL_BRIDGE_PORT=3939",
-        "-e", "NSL_BRIDGE_TOKEN=your-token-here",
+        "-v",
+        "/tmp/notebook-session-labs:/tmp/notebook-session-labs",
+        "-e",
+        "NSL_BRIDGE_HOST=host.docker.internal",
+        "-e",
+        "NSL_BRIDGE_TOKEN=your-token-here",
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
       ],
       "disabled": false
