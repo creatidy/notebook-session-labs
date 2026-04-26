@@ -54,9 +54,9 @@ Both workflows run on tag push matching `v*`, **but only if the tagged commit is
 | `release-extension.yml` | `.vsix` | VS Code Marketplace + GitHub artifact |
 | `release-docker.yml` | Docker image | GHCR (`ghcr.io/creatidy/notebook-session-labs-mcp`) |
 
-Docker image tags generated from a `v0.1.0` tag:
-- `0.1.0`
-- `0.1`
+Docker image tags generated from a `v<version>` tag (e.g. `v0.2.0`):
+- `<version>` (e.g. `0.2.0`)
+- `<major>.<minor>` (e.g. `0.2`)
 - Short git SHA
 - `latest` (for releases from the default branch)
 
@@ -110,11 +110,11 @@ If token auth is enabled, add `-e NSL_BRIDGE_TOKEN=<token>`.
 echo "<GITHUB_TOKEN>" | docker login ghcr.io -u <USERNAME> --password-stdin
 
 # Tag
-docker tag ghcr.io/creatidy/notebook-session-labs-mcp:local ghcr.io/creatidy/notebook-session-labs-mcp:0.1.0
+docker tag ghcr.io/creatidy/notebook-session-labs-mcp:local ghcr.io/creatidy/notebook-session-labs-mcp:<version>
 docker tag ghcr.io/creatidy/notebook-session-labs-mcp:local ghcr.io/creatidy/notebook-session-labs-mcp:latest
 
 # Push
-docker push ghcr.io/creatidy/notebook-session-labs-mcp:0.1.0
+docker push ghcr.io/creatidy/notebook-session-labs-mcp:<version>
 docker push ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
 
@@ -126,8 +126,9 @@ The GitHub Actions CI workflow handles build verification on every push to `main
 
 ## Assumptions
 
+- The root `package.json` version is the single source of truth; use `pnpm version:bump <version>` to bump all packages in lockstep
 - The extension version in `packages/vscode-extension/package.json` is the source of truth for the VSIX version
-- The git tag version (`v0.1.0`) should match the extension version
+- The git tag version (`v<version>`) should match the extension version
 - Docker image versioning is derived from the git tag via `docker/metadata-action`
 - The `@vscode/vsce` tool is available via `npx` in the extension package
 - GHCR is the only supported public container registry

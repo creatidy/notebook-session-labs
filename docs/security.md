@@ -55,7 +55,7 @@ Security measures:
 - File permissions are set to `0600` (owner-only read/write)
 - The state directory uses sticky bit (`01777`, like `/tmp`)
 - Stale files from crashed processes are automatically cleaned up
-- Files expire after a configurable max age (default: 24 hours)
+- Files expire after a configurable max age (default: 1 hour)
 - Use `NSL_STATE_DIR` to control the directory location
 
 ## Logging

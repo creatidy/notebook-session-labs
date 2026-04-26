@@ -13,7 +13,7 @@ Use this checklist to verify the extension and MCP server work correctly with a 
 - [ ] Open a notebook (`.ipynb`) in the Extension Development Host
 - [ ] Verify the status bar shows "Notebook Bridge" (running)
 - [ ] Run "Notebook Session Labs: Show Bridge Status" command
-- [ ] Note the port displayed (no token needed by default)
+- [ ] Note the port and token displayed (token auth is always enabled)
 
 ## MCP Server Verification
 
@@ -21,12 +21,10 @@ Set environment variables:
 ```bash
 export NSL_BRIDGE_HOST=127.0.0.1
 export NSL_BRIDGE_PORT=<port from extension>
-```
-
-If token auth is enabled, also set:
-```bash
 export NSL_BRIDGE_TOKEN=<token from extension>
 ```
+
+Token auth is always enabled. The token is shown in the VS Code status bar.
 
 - [ ] MCP server starts: `node packages/mcp-server/dist/index.js`
 - [ ] Health check passes (no warning in output)
@@ -50,7 +48,10 @@ export NSL_BRIDGE_TOKEN=<token from extension>
 ### Execution Operations
 - [ ] `execute_cell` on a cell with `print("test")` returns output
 - [ ] `run_all_cells` executes all cells
+- [ ] `cancel_execution` cancels a running execution
 - [ ] `save_notebook` saves the notebook
+- [ ] `clear_cell_outputs` clears outputs for a specific cell
+- [ ] `clear_all_outputs` clears outputs for all cells
 
 ### Edit + Rerun Cycle
 - [ ] Edit a cell source to `1 + 1`

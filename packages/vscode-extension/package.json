@@ -10,8 +10,17 @@
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": ["Notebooks", "Programming Languages", "Other"],
-  "keywords": ["notebook", "mcp", "bridge", "ai"],
+  "categories": [
+    "Notebooks",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "notebook",
+    "mcp",
+    "bridge",
+    "ai"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/creatidy/notebook-session-labs.git",
@@ -68,7 +77,10 @@
         "notebookSessionLabs.bridge.authMode": {
           "type": "string",
           "default": "token",
-          "enum": ["none", "token"],
+          "enum": [
+            "none",
+            "token"
+          ],
           "enumDescriptions": [
             "Legacy — silently upgraded to 'token' for security. Token auth is always enforced.",
             "Require an ephemeral bearer token for all bridge requests (always active)"
@@ -83,7 +95,12 @@
         "notebookSessionLabs.logging.level": {
           "type": "string",
           "default": "info",
-          "enum": ["debug", "info", "warn", "error"],
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
           "description": "Log level for the extension"
         },
         "notebookSessionLabs.output.maxSize": {

@@ -15,6 +15,7 @@
     "clean": "pnpm -r run clean",
     "changeset": "changeset",
     "version": "changeset version",
+    "version:bump": "bash scripts/version-bump.sh",
     "docker:build": "docker build -t ghcr.io/creatidy/notebook-session-labs-mcp:local .",
     "docker:run": "docker run --rm -e NSL_BRIDGE_HOST -e NSL_BRIDGE_PORT -e NSL_BRIDGE_TOKEN ghcr.io/creatidy/notebook-session-labs-mcp:local"
   },

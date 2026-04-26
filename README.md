@@ -66,16 +66,16 @@ docker run -i --rm --network=host \
   ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
 
-### Run with Docker (Windows / macOS)
+### Run with Docker (Windows)
 
-```bash
-docker run -i --rm --network=host \
-  -v ~/.notebook-session-labs:/tmp/notebook-session-labs \
-  -e NSL_BRIDGE_HOST=host.docker.internal \
+```powershell
+docker run -i --rm --network=host `
+  -v "$env:TEMP\notebook-session-labs:/tmp/notebook-session-labs" `
+  -e NSL_BRIDGE_HOST=host.docker.internal `
   ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
 
-> **Note:** On Linux the extension writes port files to `/tmp/notebook-session-labs/`. On Windows and macOS the default is `~/.notebook-session-labs/`. The Docker container reads them from `/tmp/notebook-session-labs` via a bind mount. You can override the extension's state directory by setting the `NSL_STATE_DIR` environment variable in VS Code settings.
+> **Note:** On Linux and macOS the extension writes port files to `/tmp/notebook-session-labs/`. On Windows the default is `%TEMP%\notebook-session-labs`. The Docker container reads them from `/tmp/notebook-session-labs` via a bind mount. You can override the extension's state directory by setting the `NSL_STATE_DIR` environment variable in VS Code settings.
 
 See [llms-installation.md](llms-installation.md) for full installation options.
 
@@ -104,7 +104,7 @@ See [llms-installation.md](llms-installation.md) for full installation options.
 }
 ```
 
-**Windows / macOS:**
+**Windows:**
 
 ```json
 {
@@ -116,7 +116,7 @@ See [llms-installation.md](llms-installation.md) for full installation options.
       "command": "docker",
       "args": [
         "run", "-i", "--rm", "--network=host",
-        "-v", "~/.notebook-session-labs:/tmp/notebook-session-labs",
+        "-v", "%TEMP%\\notebook-session-labs:/tmp/notebook-session-labs",
         "-e", "NSL_BRIDGE_HOST=host.docker.internal",
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
       ]
@@ -174,6 +174,8 @@ See [docs/architecture.md](docs/architecture.md) for details.
 - `run_all_cells` - Run all cells
 - `cancel_execution` - Cancel execution
 - `save_notebook` - Save the notebook
+- `clear_cell_outputs` - Clear outputs for a specific cell
+- `clear_all_outputs` - Clear outputs for all cells
 
 ### Prompts
 - `notebook-cite` - Generate a cell citation reference
@@ -182,7 +184,7 @@ See [docs/architecture.md](docs/architecture.md) for details.
 ## Security
 
 - Bridge binds to `127.0.0.1` only
-- Ephemeral bearer token, never persisted
+- Ephemeral bearer token, written to PID-scoped port file with `0600` permissions
 - No telemetry by default
 - Debug logging requires explicit opt-in
 - Read and write tools are clearly separated
