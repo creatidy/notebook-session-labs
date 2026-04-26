@@ -1046,101 +1046,65 @@ export function getExecutionStatus(
 }
 
 /**
- * Run all cells in a notebook and wait for completion.
+ * Run all cells in a notebook (fire-and-forget dispatch).
  *
- * Uses event-driven monitoring via `ExecutionMonitor` with a polling fallback.
+ * Stores previous execution orders on cell metadata so that
+ * `getExecutionStatus` can detect completion, then dispatches
+ * `notebook.execute` and returns immediately.
+ * The caller is expected to poll `getExecutionStatus` for each
+ * code cell to determine when execution finishes.
  */
 export async function runAllCells(
   doc: vscode.NotebookDocument,
-  timeoutMs?: number,
-): Promise<ExecutionResult[]> {
-  log.info({ notebookId: notebookId(doc) }, "Running all cells");
+  _timeoutMs?: number,
+): Promise<{ dispatched: boolean; codeCellIndices: number[] }> {
+  log.info({ notebookId: notebookId(doc) }, "Dispatching run-all-cells");
 
-  // Record previous execution orders for all code cells
+  // Record previous execution orders for all code cells via metadata
   const codeCellIndices: number[] = [];
-  const previousOrders = new Map<number, number | undefined>();
   for (let i = 0; i < doc.cellCount; i++) {
     const cell = doc.cellAt(i);
     if (cell.kind === vscode.NotebookCellKind.Code) {
       codeCellIndices.push(i);
-      previousOrders.set(i, cell.executionSummary?.executionOrder);
     }
   }
 
   if (codeCellIndices.length === 0) {
-    return [];
+    return { dispatched: false, codeCellIndices: [] };
   }
 
-  const startTime = Date.now();
-  const timeout = timeoutMs || 120_000; // Default 2 min for all cells
-
-  await vscode.commands.executeCommand(
-    "notebook.execute",
-    doc.uri,
-  );
-
-  // Event-driven wait with polling fallback
-  const monitor = getExecutionMonitor();
-  const deadline = startTime + timeout;
-  const pollInterval = 500;
-  const completed = new Set<number>();
-
-  // Set up event-driven completion listeners
-  const completionPromises = new Map<number, Promise<CellExecutionCompletion>>();
-  for (const idx of codeCellIndices) {
-    const remaining = Math.max(deadline - Date.now(), 1000);
-    completionPromises.set(
-      idx,
-      monitor.waitForCellCompletion(doc, idx, remaining),
-    );
-  }
-
-  // Poll as fallback, also check event-driven completions
-  while (Date.now() < deadline && completed.size < codeCellIndices.length) {
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
-
-    for (const idx of codeCellIndices) {
-      if (completed.has(idx)) continue;
-      const cell = doc.cellAt(idx);
-      const currentOrder = cell.executionSummary?.executionOrder;
-      const previousOrder = previousOrders.get(idx);
-      if (currentOrder !== undefined && currentOrder !== previousOrder) {
-        completed.add(idx);
-      }
-    }
-  }
-
-  // Build results for all code cells
-  const results: ExecutionResult[] = [];
+  // Store _nslPrevExecOrder on each code cell so getExecutionStatus
+  // can detect when execution completes (executionOrder changes).
   for (const idx of codeCellIndices) {
     const cell = doc.cellAt(idx);
-    const currentOrder = cell.executionSummary?.executionOrder;
-    const didComplete = completed.has(idx);
-
-    if (didComplete) {
-      const outputs = getCellOutputs(cell);
-      const hasError = cell.executionSummary?.success === false;
-      results.push({
-        cellId: cellId(cell),
-        status: hasError ? "failed" : "succeeded",
-        executionCount: currentOrder ?? null,
-        outputs,
-        durationMs: Date.now() - startTime,
-        error: hasError ? extractErrorMessage(outputs) : null,
-      });
-    } else {
-      results.push({
-        cellId: cellId(cell),
-        status: "pending",
-        executionCount: null,
-        outputs: [],
-        durationMs: Date.now() - startTime,
-        error: "Execution timed out or did not complete",
-      });
-    }
+    const existingMeta = (cell.metadata as Record<string, unknown>) ?? {};
+    const wsEdit = new vscode.WorkspaceEdit();
+    const cellData = new vscode.NotebookCellData(
+      cell.kind,
+      cell.document.getText(),
+      cell.document.languageId,
+    );
+    cellData.metadata = {
+      ...existingMeta,
+      [NSL_CELL_ID_META_KEY]: (existingMeta[NSL_CELL_ID_META_KEY] as string) || randomCellId(),
+      _nslPrevExecOrder: cell.executionSummary?.executionOrder ?? null,
+    };
+    cellData.outputs = [...cell.outputs];
+    wsEdit.set(
+      doc.uri,
+      [vscode.NotebookEdit.replaceCells(
+        new vscode.NotebookRange(idx, idx + 1),
+        [cellData],
+      )],
+    );
+    // eslint-disable-next-line no-await-in-loop
+    await vscode.workspace.applyEdit(wsEdit);
   }
 
-  return results;
+  // Fire-and-forget: dispatch notebook execution
+  void vscode.commands.executeCommand("notebook.execute", doc.uri);
+
+  return { dispatched: true, codeCellIndices };
 }
 
 /**

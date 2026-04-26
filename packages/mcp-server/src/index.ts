@@ -352,11 +352,38 @@ server.tool("execute_cell", "Execute a specific cell and optionally wait for com
   }
 });
 
-server.tool("run_all_cells", "Run all cells in the notebook", {
+server.tool("run_all_cells", "Run all cells in the notebook (async — returns immediately, poll cell status with list_cells or read_cell_output)", {
   notebookId: NotebookIdParam,
-  timeoutMs: z.number().int().positive().optional().describe("Execution timeout in milliseconds"),
+  timeoutMs: z.number().int().positive().optional().describe("Unused — kept for schema compatibility. Execution is always async."),
 }, async ({ notebookId, timeoutMs }) => {
-  return textResult(await bridge("RUN_ALL_CELLS", { notebookId, timeoutMs }));
+  // Dispatch execution — returns immediately with code cell indices.
+  // The caller should poll `list_cells` or `read_cell_output` to check completion.
+  const dispatchResult = await bridge("RUN_ALL_CELLS", {
+    notebookId,
+    timeoutMs,
+  }) as Record<string, unknown>;
+
+  const dispatched = dispatchResult.dispatched as boolean;
+  const codeCellIndices = dispatchResult.codeCellIndices as number[];
+
+  if (!dispatched || codeCellIndices.length === 0) {
+    return textResult({
+      status: "completed",
+      dispatched: false,
+      codeCellIndices,
+      results: [],
+      message: codeCellIndices.length === 0
+        ? "No code cells to execute"
+        : "Execution dispatch failed",
+    });
+  }
+
+  return textResult({
+    status: "dispatched",
+    dispatched: true,
+    codeCellIndices,
+    message: `Execution dispatched for ${codeCellIndices.length} code cell(s). Poll cell status with list_cells or read_cell_output.`,
+  });
 });
 
 server.tool("cancel_execution", "Cancel the current notebook execution", {

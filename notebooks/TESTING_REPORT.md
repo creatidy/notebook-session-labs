@@ -1,6 +1,6 @@
 # Integration Testing Report
 
-**Date:** 2026-04-26  
+**Date:** 2026-04-26 (updated)  
 **Tester:** Cline (Automated)  
 **Notebook:** `playground.ipynb`  
 **MCP Server:** `notebook-session-labs` (`ghcr.io/creatidy/notebook-session-labs-mcp:latest`)  
@@ -15,15 +15,15 @@
 | 1. Discovery | 8 | 8 | 0 | 0 | 0 |
 | 2. Editing | 7 | 7 | 0 | 0 | 0 |
 | 3. Restoration | 3 | 3 | 0 | 0 | 0 |
-| 4. Execution | 6 | 5 | 0 | 1 | 0 |
+| 4. Execution | 6 | 6 | 0 | 0 | 0 |
 | 5. Utility Tools | 3 | 3 | 0 | 0 | 0 |
 | 6. Prompts | 3 | 0 | 0 | 0 | 3 |
 | 7. Cell-by-ID | 7 | 7 | 0 | 0 | 0 |
 | 8. Edge Cases | 7 | 6 | 0 | 0 | 1 |
 | 9. Final | 2 | 2 | 0 | 0 | 0 |
-| **Total** | **46** | **41** | **0** | **1** | **4** |
+| **Total** | **46** | **42** | **0** | **0** | **4** |
 
-**Result: ✅ 41/46 PASSED, 0 FAILED, 1 KNOWN ISSUE, 4 SKIPPED**
+**Result: ✅ 42/46 PASSED, 0 FAILED, 0 KNOWN ISSUES, 4 SKIPPED**
 
 ---
 
@@ -54,7 +54,7 @@
 | 4.3 | execute_cell (error) | `execute_cell` | ✅ PASS | status=failed, error contains ZeroDivisionError traceback |
 | 4.4 | execute_cell (by ID) | `execute_cell`, `list_cells` | ✅ PASS | status=succeeded, output contains Python/platform info |
 | 4.5 | cancel_execution | `execute_cell`, `cancel_execution` | ✅ PASS | Cancel succeeded, cell returned to idle after KeyboardInterrupt |
-| 4.6 | run_all_cells | `run_all_cells` | ⚠️ KNOWN ISSUE | Bridge request timed out (Issue #12) |
+| 4.6 | run_all_cells | `run_all_cells`, `list_cells` | ✅ PASS | Async dispatch returns immediately, cells execute, polling confirms completion |
 | 5.1 | clear_cell_outputs | `clear_cell_outputs`, `read_cell_output` | ✅ PASS | Output array empty, executionStatus=idle |
 | 5.2 | clear_all_outputs | `clear_all_outputs`, `list_cells` | ✅ PASS | All cells have hasOutput=false |
 | 5.3 | save_notebook | `save_notebook`, `read_notebook` | ✅ PASS | success=true, isDirty=false after save |
@@ -82,11 +82,11 @@
 
 ## Known Issues
 
-### Issue #12: `run_all_cells` Bridge Timeout
-- **Status:** 🔧 Code implemented, ⏳ Awaiting live verification
-- **Symptom:** `run_all_cells` with `timeoutMs: 60000` times out at the bridge level
-- **Impact:** Users must execute cells individually rather than all at once
-- **Workaround:** Use `execute_cell` for each cell in sequence
+### Issue #12: `run_all_cells` Bridge Timeout — **RESOLVED** ✅
+- **Status:** Fixed and live-verified
+- **Root cause:** MCP server polled for all cells to complete before returning, exceeding the MCP client's request timeout
+- **Fix:** Made `run_all_cells` truly async — dispatches execution and returns immediately with `status: "dispatched"`. Caller polls cell status via `list_cells` or `read_cell_output`
+- **Verification:** `run_all_cells` returns instantly with code cell indices; subsequent `read_cell_output` and `list_cells` confirm all executable cells completed
 
 ---
 
@@ -106,15 +106,15 @@
 
 ```
 Total tests:    46
-Passed:         41
+Passed:         42
 Failed:         0
-Expected fail:  1 (Issue #12: run_all_cells timeout)
+Expected fail:  0
 Skipped:        4 (3 prompts + 1 single notebook)
 
 Discovery (8):    8/8 passed
 Editing (7):      7/7 passed
 Restoration (3):  3/3 passed
-Execution (6):    5/6 passed (1 known issue)
+Execution (6):    6/6 passed
 Utility tools (3):3/3 passed
 Prompts (3):      0/3 passed (skipped)
 Cell-by-ID (7):   7/7 passed
@@ -122,4 +122,4 @@ Edge cases (7):   6/7 passed (1 skipped)
 Final (2):        2/2 passed
 
 Blocking issues for release: none
-Non-blocking issues: Issue #12 (run_all_cells bridge timeout)
+Non-blocking issues: none
