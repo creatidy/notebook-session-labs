@@ -916,14 +916,15 @@ export async function moveCell(
 /**
  * Execute a single cell.
  *
- * Uses event-driven monitoring via `ExecutionMonitor` to detect completion,
- * with a polling fallback for robustness.
+ * Always dispatches execution and returns immediately with status "pending".
+ * Use `getExecutionStatus` to poll for completion, or the caller may
+ * implement their own waiting strategy.
  */
 export async function executeCell(
   doc: vscode.NotebookDocument,
   cellIndex: number,
-  timeoutMs?: number,
-  waitForCompletion: boolean = true,
+  _timeoutMs?: number,
+  _waitForCompletion?: boolean,
 ): Promise<ExecutionResult> {
   if (cellIndex < 0 || cellIndex >= doc.cellCount) {
     throw new Error(`Cell index ${cellIndex} out of range`);
@@ -933,7 +934,31 @@ export async function executeCell(
   const startTime = Date.now();
   const previousExecutionOrder = cell.executionSummary?.executionOrder;
 
-    log.info({ cellIndex, notebookId: notebookId(doc) }, "Executing cell");
+  // Store the previous execution order on the cell metadata so we can detect
+  // when execution completes (new executionOrder differs from this).
+  const existingMeta = (cell.metadata as Record<string, unknown>) ?? {};
+  const wsEdit = new vscode.WorkspaceEdit();
+  const cellData = new vscode.NotebookCellData(
+    cell.kind,
+    cell.document.getText(),
+    cell.document.languageId,
+  );
+  cellData.metadata = {
+    ...existingMeta,
+    [NSL_CELL_ID_META_KEY]: (existingMeta[NSL_CELL_ID_META_KEY] as string) || randomCellId(),
+    _nslPrevExecOrder: previousExecutionOrder ?? null,
+  };
+  cellData.outputs = [...cell.outputs];
+  wsEdit.set(
+    doc.uri,
+    [vscode.NotebookEdit.replaceCells(
+      new vscode.NotebookRange(cellIndex, cellIndex + 1),
+      [cellData],
+    )],
+  );
+  await vscode.workspace.applyEdit(wsEdit);
+
+  log.info({ cellIndex, notebookId: notebookId(doc), previousExecutionOrder }, "Executing cell (async)");
 
   try {
     // Show the notebook and select the target cell to ensure it's the active editor.
@@ -945,7 +970,6 @@ export async function executeCell(
     await new Promise((resolve) => setTimeout(resolve, 300));
 
     // Dispatch cell execution. Uses { ranges, document } argument format.
-    // The command silently no-ops if no kernel is available.
     void vscode.commands.executeCommand(
       "notebook.cell.execute",
       {
@@ -954,32 +978,20 @@ export async function executeCell(
       },
     );
 
-    if (waitForCompletion) {
-      const timeout = timeoutMs || 60_000;
-      const result = await waitForCellCompletion(
-        doc,
-        cellIndex,
-        startTime,
-        previousExecutionOrder,
-        timeout,
-      );
-      return result;
-    } else {
-      // Fire-and-forget mode
-      return {
-        cellId: cellId(cell),
-        status: "pending",
-        executionCount: null,
-        outputs: [],
-        durationMs: null,
-        error: null,
-      };
-    }
+    // Return immediately with pending status
+    return {
+      cellId: cellId(doc.cellAt(cellIndex)),
+      status: "pending",
+      executionCount: null,
+      outputs: [],
+      durationMs: null,
+      error: null,
+    };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    log.error({ error, cellIndex }, "Cell execution failed");
+    log.error({ error, cellIndex }, "Cell execution dispatch failed");
     return {
-      cellId: cellId(cell),
+      cellId: cellId(doc.cellAt(cellIndex)),
       status: "failed",
       executionCount: null,
       outputs: [],
@@ -987,6 +999,50 @@ export async function executeCell(
       error,
     };
   }
+}
+
+/**
+ * Get the current execution status of a cell.
+ * Compares current executionOrder against the stored previous value
+ * to determine if execution has completed.
+ */
+export function getExecutionStatus(
+  doc: vscode.NotebookDocument,
+  cellIndex: number,
+): ExecutionResult {
+  if (cellIndex < 0 || cellIndex >= doc.cellCount) {
+    throw new Error(`Cell index ${cellIndex} out of range`);
+  }
+
+  const cell = doc.cellAt(cellIndex);
+  const currentOrder = cell.executionSummary?.executionOrder;
+  const meta = cell.metadata as Record<string, unknown> | undefined;
+  const previousOrder = meta?._nslPrevExecOrder as number | null | undefined;
+  const startTime = meta?._nslExecStart as number | null | undefined;
+
+  // If executionOrder changed from the stored previous value, execution completed
+  if (currentOrder !== undefined && currentOrder !== previousOrder) {
+    const outputs = getCellOutputs(cell);
+    const hasError = cell.executionSummary?.success === false;
+    return {
+      cellId: cellId(cell),
+      status: hasError ? "failed" : "succeeded",
+      executionCount: currentOrder ?? null,
+      outputs,
+      durationMs: startTime ? Date.now() - startTime : null,
+      error: hasError ? extractErrorMessage(outputs) : null,
+    };
+  }
+
+  // Still pending (or hasn't started yet)
+  return {
+    cellId: cellId(cell),
+    status: "pending",
+    executionCount: null,
+    outputs: [],
+    durationMs: startTime ? Date.now() - startTime : null,
+    error: null,
+  };
 }
 
 /**

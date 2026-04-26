@@ -133,6 +133,9 @@ async function dispatch(
     case BRIDGE_METHODS.CANCEL_EXECUTION:
       return handleCancelExecution(params);
 
+    case BRIDGE_METHODS.GET_EXECUTION_STATUS:
+      return handleGetExecutionStatus(params);
+
     // ── Utility ──
     case BRIDGE_METHODS.SAVE_NOTEBOOK:
       return handleSaveNotebook(params);
@@ -411,6 +414,21 @@ async function handleCancelExecution(params: Record<string, unknown>) {
   }
   await notebookService.cancelExecution(doc);
   return { success: true };
+}
+
+function handleGetExecutionStatus(params: Record<string, unknown>) {
+  const notebookId = params.notebookId as string | undefined;
+  const doc = notebookService.resolveNotebook(notebookId);
+  if (!doc) {
+    throw new BridgeHandlerError(
+      ErrorCode.NOTEBOOK_NOT_FOUND,
+      notebookId
+        ? `Notebook not found: ${notebookId}`
+        : "No active notebook",
+    );
+  }
+  const cellIndex = resolveCellIndex(doc, params);
+  return notebookService.getExecutionStatus(doc, cellIndex);
 }
 
 async function handleSaveNotebook(params: Record<string, unknown>) {

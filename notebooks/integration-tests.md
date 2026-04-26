@@ -17,9 +17,24 @@ You are the test runner. Execute each phase in order. For every test:
 5. After all phases, restore the notebook to its original state if needed.
 6. Produce the final test report.
 
+**Notebook structure (playground.ipynb):**
+
+| Index | Kind     | Content summary                         |
+|-------|----------|-----------------------------------------|
+| 0     | markdown | `# Notebook Session Labs — Playground`  |
+| 1     | code     | `print("Hello from Notebook Session Labs!")`, `2 + 2` |
+| 2     | code     | `import sys`, `import platform`, info dict |
+| 3     | markdown | `## Error Handling Test`                |
+| 4     | code     | `1 / 0` (intentional error)             |
+| 5     | code     | `import json`, data dict                |
+| 6     | code     | `import time`, 60-second loop           |
+
 **Known issues to be aware of:**
 - **Issue 11:** `execute_cell` may fail if the kernel hasn't been initialized (run a cell manually first or accept as expected failure).
 - **Issue 12:** `run_all_cells` may time out at the MCP transport layer for long-running notebooks.
+
+**Behavior notes:**
+- **`move_cell` index shift:** When `fromIndex < toIndex`, the actual landing index is `toIndex - 1` because the cell is first removed (shifting subsequent cells up) then inserted at the target position.
 
 ---
 
@@ -56,9 +71,9 @@ Call `list_cells` with no parameters (targets active notebook).
 - Result is an array.
 - Array length equals the `cellCount` from Test 1.1.
 - Each cell has: `index`, `id`, `kind`, `sourcePreview`, `executionCount`, `executionStatus`, `hasOutput`.
-- Cell at index 0 has `kind` = `"code"`.
+- Cell at index 0 has `kind` = `"markdown"` (notebook header).
 - Cell at index 1 has `kind` = `"code"`.
-- Cell at index 2 has `kind` = `"markdown"`.
+- Cell at index 3 has `kind` = `"markdown"` (error section header).
 - Cell indices are sequential starting from 0.
 
 ### Test 1.4: `read_notebook`
@@ -72,25 +87,25 @@ Call `read_notebook` with no parameters.
 
 ### Test 1.5: `read_cell` (by index)
 
-Call `read_cell` with `{ cellIndex: 0 }`.
+Call `read_cell` with `{ cellIndex: 1 }`.
 
 **Assert:**
-- Response contains: `index` = 0, `id`, `kind` = `"code"`, `source` (string containing `Hello from Notebook Session Labs`), `language` = `"python"`.
+- Response contains: `index` = 1, `id`, `kind` = `"code"`, `source` (string containing `Hello from Notebook Session Labs`), `language` = `"python"`.
 - `source` is the full source text (not truncated).
 - Response contains `outputs` (array) and `metadata` (object).
 
 ### Test 1.6: `read_cell` (by ID)
 
-First, call `list_cells` and capture the `id` of cell at index 1. Then call `read_cell` with `{ cellId: "<captured_id>" }`.
+First, call `list_cells` and capture the `id` of cell at index 2. Then call `read_cell` with `{ cellId: "<captured_id>" }`.
 
 **Assert:**
-- Response `index` = 1.
+- Response `index` = 2.
 - Response `source` contains `import sys` and `import platform`.
 - Response `id` matches the captured ID.
 
 ### Test 1.7: `read_cell_output`
 
-Call `read_cell_output` with `{ cellIndex: 0 }`.
+Call `read_cell_output` with `{ cellIndex: 1 }`.
 
 **Assert:**
 - Response is an array (may be empty if cell hasn't been executed yet, which is acceptable).
@@ -186,7 +201,7 @@ Call `move_cell` with:
 
 **Assert:**
 - Call `read_cell` with `{ cellIndex: 0 }` — should no longer have the REPLACED content.
-- Call `read_cell` with `{ cellIndex: 2 }` — should have `source` containing `REPLACED: this was a code cell, now markdown`.
+- Due to the `move_cell` index shift behavior, the moved cell lands at `toIndex - 1 = 1`. Call `read_cell` with `{ cellIndex: 1 }` — should have `source` containing `REPLACED: this was a code cell, now markdown`.
 
 ### Test 2.6: `delete_cell`
 
@@ -230,7 +245,7 @@ After all editing tests, restore the notebook to its original state.
 **Step 3.3:** Call `read_notebook` and verify:
 - `isDirty` = `false` (after save).
 - Cell count matches original.
-- Cell 0 source contains `Hello from Notebook Session Labs`.
+- Cell 1 source contains `Hello from Notebook Session Labs`.
 
 ---
 
@@ -243,7 +258,7 @@ After all editing tests, restore the notebook to its original state.
 Call `execute_cell` with:
 ```json
 {
-  "cellIndex": 0,
+  "cellIndex": 1,
   "waitForCompletion": true,
   "timeoutMs": 30000
 }
@@ -256,7 +271,7 @@ Call `execute_cell` with:
 
 ### Test 4.2: Verify execution output via `read_cell_output`
 
-Call `read_cell_output` with `{ cellIndex: 0 }`.
+Call `read_cell_output` with `{ cellIndex: 1 }`.
 
 **Assert:**
 - Response is a non-empty array.
@@ -268,13 +283,13 @@ Call `read_cell_output` with `{ cellIndex: 0 }`.
 Call `execute_cell` with:
 ```json
 {
-  "cellIndex": 3,
+  "cellIndex": 4,
   "waitForCompletion": true,
   "timeoutMs": 15000
 }
 ```
 
-Cell 3 contains `1 / 0` which should produce an error.
+Cell 4 contains `1 / 0` which should produce an error.
 
 **Assert:**
 - Response is not a transport error (bridge-level).
@@ -301,7 +316,7 @@ Call `list_cells`, capture the `id` of cell at index 1. Call `execute_cell` with
 Call `execute_cell` with:
 ```json
 {
-  "cellIndex": 5,
+  "cellIndex": 6,
   "waitForCompletion": false
 }
 ```
@@ -310,7 +325,7 @@ Wait 2 seconds, then call `cancel_execution` with no parameters.
 
 **Assert:**
 - `cancel_execution` response is not an error.
-- Call `read_cell` with `{ cellIndex: 5 }` — `executionStatus` should be `"idle"` or `"cancelled"` (not `"executing"`).
+- Call `read_cell` with `{ cellIndex: 6 }` — `executionStatus` should be `"idle"` or `"cancelled"` (not `"executing"`).
 
 ### Test 4.6: `run_all_cells` (optional — may hit Issue 12)
 
@@ -332,12 +347,12 @@ Call `run_all_cells` with:
 
 ### Test 5.1: `clear_cell_outputs`
 
-Call `clear_cell_outputs` with `{ cellIndex: 0 }`.
+Call `clear_cell_outputs` with `{ cellIndex: 1 }`.
 
 **Assert:**
 - Response is not an error.
-- Call `read_cell_output` with `{ cellIndex: 0 }` — response should be an empty array.
-- Call `read_cell` with `{ cellIndex: 0 }` — `executionStatus` should be `"idle"`, `hasOutput` should be `false` or outputs empty.
+- Call `read_cell_output` with `{ cellIndex: 1 }` — response should be an empty array.
+- Call `read_cell` with `{ cellIndex: 1 }` — `executionStatus` should be `"idle"`, `hasOutput` should be `false` or outputs empty.
 
 ### Test 5.2: `clear_all_outputs`
 
@@ -379,13 +394,13 @@ Use the `notebook-cite` prompt with:
 Call `get_active_notebook` to get the notebook ID. Then use the `notebook-cite` prompt with:
 ```json
 {
-  "cellIndex": 3,
+  "cellIndex": 4,
   "notebookId": "<notebook_id>"
 }
 ```
 
 **Assert:**
-- Response contains citation for cell 3 (the error cell `1 / 0`).
+- Response contains citation for cell 4 (the error cell `1 / 0`).
 - No error in the response.
 
 ### Test 6.3: `notebook-review` prompt
@@ -583,13 +598,14 @@ Call `delete_cell` with `{}` (no cell identifier).
 ### Step 9.1: Restore notebook
 
 Call `read_notebook`. Compare the current state with the original:
-- Cell count should be 6 (original playground.ipynb).
-- Cell 0: `Hello from Notebook Session Labs!`
-- Cell 1: `import sys`
-- Cell 2: `## Error Handling Test` (markdown)
-- Cell 3: `1 / 0`
-- Cell 4: `import json`
-- Cell 5: `import time`
+- Cell count should be 7 (original playground.ipynb).
+- Cell 0: `# Notebook Session Labs — Playground` (markdown)
+- Cell 1: `Hello from Notebook Session Labs!`
+- Cell 2: `import sys`
+- Cell 3: `## Error Handling Test` (markdown)
+- Cell 4: `1 / 0`
+- Cell 5: `import json`
+- Cell 6: `import time`
 
 If any cells differ, use `edit_cell_source` / `replace_cell` / `insert_cell` / `delete_cell` to fix, then `save_notebook`.
 

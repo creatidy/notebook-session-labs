@@ -20,6 +20,9 @@ import {
   BRIDGE_PORT_FILE_DIR,
   BRIDGE_PORT_FILE_PATTERN,
   DEFAULT_REQUEST_TIMEOUT_MS,
+  DEFAULT_POLL_INITIAL_MS,
+  DEFAULT_POLL_MAX_MS,
+  DEFAULT_POLL_MULTIPLIER,
 } from "@notebook-session-labs/shared";
 import { callBridge, checkHealth, type BridgeClientConfig } from "./client.js";
 import pino, { type Logger } from "pino";
@@ -306,13 +309,47 @@ server.tool("execute_cell", "Execute a specific cell and optionally wait for com
   timeoutMs: z.number().int().positive().optional().describe("Execution timeout in milliseconds"),
   notebookId: NotebookIdParam,
 }, async ({ cellIndex, cellId, waitForCompletion, timeoutMs, notebookId }) => {
-  return textResult(await bridge("EXECUTE_CELL", {
+  // Step 1: Dispatch execution (returns immediately with "pending")
+  const dispatchResult = await bridge("EXECUTE_CELL", {
     cellIndex,
     cellId,
-    waitForCompletion,
-    timeoutMs,
     notebookId,
-  }));
+  }) as Record<string, unknown>;
+
+  // If not waiting for completion, or dispatch already failed/succeeded, return immediately
+  if (!waitForCompletion || dispatchResult.status !== "pending") {
+    return textResult(dispatchResult);
+  }
+
+  // Step 2: Poll with exponential backoff until completion or timeout
+  const deadline = Date.now() + (timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS);
+  let delay = DEFAULT_POLL_INITIAL_MS;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    await new Promise((resolve) => setTimeout(resolve, delay));
+
+    const status = await bridge("GET_EXECUTION_STATUS", {
+      cellIndex,
+      cellId,
+      notebookId,
+    }) as Record<string, unknown>;
+
+    if (status.status !== "pending") {
+      return textResult(status);
+    }
+
+    if (Date.now() >= deadline) {
+      return textResult({
+        ...status,
+        status: "pending",
+        error: "Execution timed out while polling",
+      });
+    }
+
+    // Exponential backoff, capped
+    delay = Math.min(delay * DEFAULT_POLL_MULTIPLIER, DEFAULT_POLL_MAX_MS);
+  }
 });
 
 server.tool("run_all_cells", "Run all cells in the notebook", {

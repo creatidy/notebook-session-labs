@@ -26,8 +26,14 @@ export const DEFAULT_MAX_OUTPUT_SIZE = 100_000;
 /** Default cell execution timeout in milliseconds */
 export const DEFAULT_EXECUTION_TIMEOUT_MS = 60_000;
 
-/** Default polling interval for execution status in milliseconds */
-export const DEFAULT_POLL_INTERVAL_MS = 500;
+/** Default initial polling delay for execution status in milliseconds */
+export const DEFAULT_POLL_INITIAL_MS = 1_000;
+
+/** Maximum polling delay for execution status in milliseconds (exponential backoff cap) */
+export const DEFAULT_POLL_MAX_MS = 512_000;
+
+/** Polling backoff multiplier */
+export const DEFAULT_POLL_MULTIPLIER = 2;
 
 /** Maximum number of output items to return per cell */
 export const MAX_OUTPUT_ITEMS_PER_CELL = 100;
@@ -88,6 +94,7 @@ export const BRIDGE_METHODS = {
   EXECUTE_CELL: "execute_cell",
   RUN_ALL_CELLS: "run_all_cells",
   CANCEL_EXECUTION: "cancel_execution",
+  GET_EXECUTION_STATUS: "get_execution_status",
 
   // Utility
   HEALTH_CHECK: "health_check",
