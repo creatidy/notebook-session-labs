@@ -70,10 +70,25 @@ interface CellExecutionCompletion {
   executionOrder: number | undefined;
 }
 
+// ── Proposed API types (not in stable @types/vscode) ──
+// onDidChangeNotebookCellExecutionState is a proposed VS Code API.
+// We define local types and access it through a dynamic cast so the
+// extension compiles against stable type definitions while still
+// benefiting from the API at runtime when available.
+
+/** Mirrors the proposed NotebookCellExecutionState enum values */
+const CellExecutionState = { Idle: 1, Pending: 2, Executing: 3 } as const;
+
+/** Mirrors the proposed NotebookCellExecutionStateChangeEvent shape */
+interface CellExecutionStateChangeEvent {
+  readonly cell: vscode.NotebookCell;
+  readonly state: number;
+}
+
 /**
  * Tracks cell execution state changes via VS Code's
- * `onDidChangeNotebookCellExecutionState` event. Provides event-driven
- * alternatives to polling for execution completion.
+ * `onDidChangeNotebookCellExecutionState` proposed event. Provides
+ * event-driven alternatives to polling for execution completion.
  */
 class ExecutionMonitor implements vscode.Disposable {
   private _subscription: vscode.Disposable;
@@ -88,11 +103,12 @@ class ExecutionMonitor implements vscode.Disposable {
   constructor() {
     // onDidChangeNotebookCellExecutionState is a proposed API and may not
     // be available in all VS Code versions. Guard against its absence.
-    if (typeof vscode.notebooks.onDidChangeNotebookCellExecutionState === "function") {
+    const notebooksAny = vscode.notebooks as Record<string, unknown>;
+    if (typeof notebooksAny.onDidChangeNotebookCellExecutionState === "function") {
       this._hasEventApi = true;
-      this._subscription = vscode.notebooks.onDidChangeNotebookCellExecutionState(
-        this._onStateChange.bind(this),
-      );
+      this._subscription = (notebooksAny.onDidChangeNotebookCellExecutionState as (
+        cb: (e: CellExecutionStateChangeEvent) => void,
+      ) => vscode.Disposable)(this._onStateChange.bind(this));
     } else {
       this._hasEventApi = false;
       this._subscription = { dispose() { /* noop */ } };
@@ -105,9 +121,7 @@ class ExecutionMonitor implements vscode.Disposable {
     return doc.uri.toString();
   }
 
-  private _onStateChange(
-    event: vscode.NotebookCellExecutionStateChangeEvent,
-  ): void {
+  private _onStateChange(event: CellExecutionStateChangeEvent): void {
     if (this._disposed) return;
 
     const { cell, state } = event;
@@ -116,12 +130,12 @@ class ExecutionMonitor implements vscode.Disposable {
     const idx = cell.index;
 
     // Track that this notebook has a working kernel
-    if (state === vscode.NotebookCellExecutionState.Executing) {
+    if (state === CellExecutionState.Executing) {
       this._activeNotebooks.set(nbKey, Date.now());
     }
 
     // When cell transitions to Idle, resolve pending promises
-    if (state === vscode.NotebookCellExecutionState.Idle) {
+    if (state === CellExecutionState.Idle) {
       const cellMap = this._pendingCells.get(nbKey);
       if (!cellMap) return;
       const resolvers = cellMap.get(idx);
@@ -1170,7 +1184,7 @@ async function waitForCellCompletion(
     // Check if execution completed (execution order changed from previous)
     if (currentExecutionOrder !== undefined && currentExecutionOrder !== previousExecutionOrder) {
       const outputs = getCellOutputs(currentCell);
-      const hasError = currentCell.executionSummary.success === false;
+      const hasError = currentCell.executionSummary?.success === false;
       const durationMs = Date.now() - startTime;
 
       return {
