@@ -4,6 +4,7 @@ This file guides autonomous coding agents working in this repository. A nested `
 
 ## Working Rules
 
+- **Never mark a bug as "Fixed" or a feature as "Verified" without live testing.** Code that compiles and passes unit tests is "implemented" — not "fixed" or "verified." Only live MCP testing (via the bridge) can confirm a fix works end-to-end. Use honest status labels: "🔧 Code implemented, ⏳ Awaiting live verification" until confirmed.
 - Prefer documented APIs (VS Code, MCP) over hacks or undocumented internals.
 - Prefer simple, maintainable solutions over clever ones.
 - Keep changes minimal and scoped to the task. Do not introduce unrelated refactors.

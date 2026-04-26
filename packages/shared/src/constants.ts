@@ -11,8 +11,8 @@ export const DEFAULT_BRIDGE_HOST = "127.0.0.1";
 /** Default bridge port (0 = ephemeral) */
 export const DEFAULT_BRIDGE_PORT = 0;
 
-/** Default bridge auth mode (no token required for local loopback) */
-export const DEFAULT_BRIDGE_AUTH_MODE = "none" as const;
+/** Default bridge auth mode (token always required) */
+export const DEFAULT_BRIDGE_AUTH_MODE = "token" as const;
 
 /** JSON-RPC version string */
 export const JSON_RPC_VERSION = "2.0";
@@ -26,8 +26,14 @@ export const DEFAULT_MAX_OUTPUT_SIZE = 100_000;
 /** Default cell execution timeout in milliseconds */
 export const DEFAULT_EXECUTION_TIMEOUT_MS = 60_000;
 
-/** Default polling interval for execution status in milliseconds */
-export const DEFAULT_POLL_INTERVAL_MS = 500;
+/** Default initial polling delay for execution status in milliseconds */
+export const DEFAULT_POLL_INITIAL_MS = 1_000;
+
+/** Maximum polling delay for execution status in milliseconds (exponential backoff cap) */
+export const DEFAULT_POLL_MAX_MS = 512_000;
+
+/** Polling backoff multiplier */
+export const DEFAULT_POLL_MULTIPLIER = 2;
 
 /** Maximum number of output items to return per cell */
 export const MAX_OUTPUT_ITEMS_PER_CELL = 100;
@@ -46,7 +52,23 @@ export const SUPPORTED_OUTPUT_MIMES = [
   "image/png",
   "image/jpeg",
   "text/html",
+  // VS Code internal MIME types (decoded as text/plain by the extension)
+  "application/vnd.code.notebook.stdout",
+  "application/vnd.code.notebook.stderr",
+  "application/vnd.code.notebook.error",
 ] as const;
+
+/** Default directory for bridge port files */
+export const BRIDGE_STATE_DIR = "notebook-session-labs";
+
+/** Default directory for bridge port files on Linux/macOS and inside Docker containers */
+export const BRIDGE_PORT_FILE_DIR = "/tmp/notebook-session-labs";
+
+/** Filename pattern for bridge port files (within state dir). One per VS Code session. */
+export const BRIDGE_PORT_FILE_PATTERN = /^bridge-(\d+)\.json$/;
+
+/** Maximum age (ms) for a port file before it's considered stale (1 hour) */
+export const BRIDGE_PORT_FILE_MAX_AGE_MS = 60 * 60 * 1000;
 
 /** Bridge method names */
 export const BRIDGE_METHODS = {
@@ -65,11 +87,14 @@ export const BRIDGE_METHODS = {
   EDIT_CELL_SOURCE: "edit_cell_source",
   DELETE_CELL: "delete_cell",
   MOVE_CELL: "move_cell",
+  CLEAR_CELL_OUTPUTS: "clear_cell_outputs",
+  CLEAR_ALL_OUTPUTS: "clear_all_outputs",
 
   // Execution
   EXECUTE_CELL: "execute_cell",
   RUN_ALL_CELLS: "run_all_cells",
   CANCEL_EXECUTION: "cancel_execution",
+  GET_EXECUTION_STATUS: "get_execution_status",
 
   // Utility
   HEALTH_CHECK: "health_check",

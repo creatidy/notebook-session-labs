@@ -55,32 +55,86 @@ export NSL_BRIDGE_TOKEN=<token from extension>
 pnpm --filter @notebook-session-labs/mcp-server start
 ```
 
-The MCP server is also available as a Docker image from GHCR:
+The MCP server is also available as a Docker image from GHCR. The bridge auto-discovers the ephemeral port via a port file — no manual port configuration needed.
+
+### Run with Docker (Linux)
 
 ```bash
-docker run --rm \
+docker run -i --rm --network=host \
+  -v /tmp/notebook-session-labs:/tmp/notebook-session-labs \
   -e NSL_BRIDGE_HOST=host.docker.internal \
-  -e NSL_BRIDGE_PORT=<port> \
-  -e NSL_BRIDGE_TOKEN=<token> \
   ghcr.io/creatidy/notebook-session-labs-mcp:latest
 ```
+
+### Run with Docker (Windows)
+
+```powershell
+docker run -i --rm --network=host `
+  -v "$env:TEMP\notebook-session-labs:/tmp/notebook-session-labs" `
+  -e NSL_BRIDGE_HOST=host.docker.internal `
+  ghcr.io/creatidy/notebook-session-labs-mcp:latest
+```
+
+> **Note:** On Linux and macOS the extension writes port files to `/tmp/notebook-session-labs/`. On Windows the default is `%TEMP%\notebook-session-labs`. The Docker container reads them from `/tmp/notebook-session-labs` via a bind mount. You can override the extension's state directory by setting the `NSL_STATE_DIR` environment variable in VS Code settings.
 
 See [llms-installation.md](llms-installation.md) for full installation options.
 
 ### Configure an MCP Client
 
-Example configuration for VS Code MCP settings:
+**Auto-discovery (recommended)** — the port and token are read from the port file written by the extension. The Docker container expects port files at `/tmp/notebook-session-labs` internally.
+
+**Linux:**
+
+```json
+{
+  "servers": {
+    "notebook-session-labs": {
+      "disabled": false,
+      "timeout": 60,
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm", "--network=host",
+        "-v", "/tmp/notebook-session-labs:/tmp/notebook-session-labs",
+        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
+        "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+**Windows:**
+
+```json
+{
+  "servers": {
+    "notebook-session-labs": {
+      "disabled": false,
+      "timeout": 60,
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm", "--network=host",
+        "-v", "%TEMP%\\notebook-session-labs:/tmp/notebook-session-labs",
+        "-e", "NSL_BRIDGE_HOST=host.docker.internal",
+        "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+**From source (development only)** — if you built from source and want to run the MCP server directly:
 
 ```json
 {
   "servers": {
     "notebook-session-labs": {
       "command": "node",
-      "args": ["packages/mcp-server/dist/index.js"],
+      "args": ["/absolute/path/to/notebook-session-labs/packages/mcp-server/dist/index.js"],
       "env": {
-        "NSL_BRIDGE_HOST": "127.0.0.1",
-        "NSL_BRIDGE_PORT": "<port>",
-        "NSL_BRIDGE_TOKEN": "<token>"
+        "NSL_BRIDGE_HOST": "127.0.0.1"
       }
     }
   }
@@ -120,6 +174,8 @@ See [docs/architecture.md](docs/architecture.md) for details.
 - `run_all_cells` - Run all cells
 - `cancel_execution` - Cancel execution
 - `save_notebook` - Save the notebook
+- `clear_cell_outputs` - Clear outputs for a specific cell
+- `clear_all_outputs` - Clear outputs for all cells
 
 ### Prompts
 - `notebook-cite` - Generate a cell citation reference
@@ -128,7 +184,7 @@ See [docs/architecture.md](docs/architecture.md) for details.
 ## Security
 
 - Bridge binds to `127.0.0.1` only
-- Ephemeral bearer token, never persisted
+- Ephemeral bearer token, written to PID-scoped port file with `0600` permissions
 - No telemetry by default
 - Debug logging requires explicit opt-in
 - Read and write tools are clearly separated

@@ -1,6 +1,6 @@
 {
   "name": "notebook-session-labs",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "A professional MCP bridge for live notebook sessions inside VS Code",
   "license": "MIT",
@@ -15,6 +15,7 @@
     "clean": "pnpm -r run clean",
     "changeset": "changeset",
     "version": "changeset version",
+    "version:bump": "bash scripts/version-bump.sh",
     "docker:build": "docker build -t ghcr.io/creatidy/notebook-session-labs-mcp:local .",
     "docker:run": "docker run --rm -e NSL_BRIDGE_HOST -e NSL_BRIDGE_PORT -e NSL_BRIDGE_TOKEN ghcr.io/creatidy/notebook-session-labs-mcp:local"
   },

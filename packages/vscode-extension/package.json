@@ -1,8 +1,8 @@
 {
   "name": "notebook-session-labs",
   "displayName": "Notebook Session Labs",
-  "description": "A local bridge for live notebook sessions inside VS Code",
-  "version": "0.2.0",
+  "description": "Connect AI assistants (Claude, GPT, etc.) to your Jupyter notebooks in VS Code. Let AI read, edit, and execute your notebook cells in real time through a secure local bridge.",
+  "version": "0.3.0",
   "type": "module",
   "license": "MIT",
   "publisher": "creatidy",
@@ -10,8 +10,23 @@
   "engines": {
     "vscode": "^1.90.0"
   },
-  "categories": ["Notebooks", "Programming Languages", "Other"],
-  "keywords": ["notebook", "mcp", "bridge", "ai"],
+  "categories": [
+    "Notebooks",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "notebook",
+    "jupyter",
+    "mcp",
+    "ai",
+    "claude",
+    "cline",
+    "cursor",
+    "data science",
+    "machine learning",
+    "bridge"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/creatidy/notebook-session-labs.git",
@@ -67,18 +82,31 @@
         },
         "notebookSessionLabs.bridge.authMode": {
           "type": "string",
-          "default": "none",
-          "enum": ["none", "token"],
-          "enumDescriptions": [
-            "No token required for local loopback connections (default)",
-            "Require an ephemeral bearer token for all bridge requests"
+          "default": "token",
+          "enum": [
+            "none",
+            "token"
           ],
-          "description": "Bridge authentication mode. 'none' for local loopback (default), 'token' for optional hardening"
+          "enumDescriptions": [
+            "Legacy — silently upgraded to 'token' for security. Token auth is always enforced.",
+            "Require an ephemeral bearer token for all bridge requests (always active)"
+          ],
+          "description": "Bridge authentication mode. Token auth is always enforced regardless of this setting. The token is auto-generated and written to the port file for MCP client discovery."
+        },
+        "notebookSessionLabs.bridge.stateDir": {
+          "type": "string",
+          "default": "",
+          "description": "Directory for bridge port files (used by Docker containers to discover the bridge). Leave empty for platform default: Linux/macOS/WSL → /tmp/notebook-session-labs, Windows → C:\\Users\\<you>\\AppData\\Local\\Temp\\notebook-session-labs. The actual resolved path is shown in the bridge status notification on startup. Mount this path to /tmp/notebook-session-labs in your Docker config."
         },
         "notebookSessionLabs.logging.level": {
           "type": "string",
           "default": "info",
-          "enum": ["debug", "info", "warn", "error"],
+          "enum": [
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ],
           "description": "Log level for the extension"
         },
         "notebookSessionLabs.output.maxSize": {

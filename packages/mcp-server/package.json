@@ -1,6 +1,6 @@
 {
   "name": "@notebook-session-labs/mcp-server",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server for Notebook Session Labs - bridges to VS Code notebook sessions",
   "license": "MIT",
   "type": "module",

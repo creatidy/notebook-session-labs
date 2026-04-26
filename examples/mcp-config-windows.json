@@ -1,5 +1,5 @@
 {
-  "_comment": "Token auth is always enabled. The token is auto-discovered from the port file via the volume mount. Only set NSL_BRIDGE_TOKEN explicitly if auto-discovery is not possible (e.g., different user or restricted file permissions).",
+  "_comment": "Windows (native Docker Desktop) — Replace <you> with your Windows username. The exact state dir path is shown in the VS Code notification when the bridge starts.",
   "mcpServers": {
     "notebook-session-labs": {
       "disabled": false,
@@ -12,11 +12,9 @@
         "--rm",
         "--network=host",
         "-v",
-        "/tmp/notebook-session-labs:/tmp/notebook-session-labs",
+        "C:\\Users\\<you>\\AppData\\Local\\Temp\\notebook-session-labs:/tmp/notebook-session-labs",
         "-e",
         "NSL_BRIDGE_HOST=host.docker.internal",
-        "-e",
-        "NSL_BRIDGE_TOKEN=your-token-here",
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
       ]
     }
