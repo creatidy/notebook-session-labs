@@ -41,7 +41,7 @@ After the first Docker image publish, the package may default to private. To mak
 4. Review the generated changelog entries
 5. Commit the version bump
 6. Tag the release: `git tag v<version>`
-7. Push: `git push --follow-tags`
+7. Push: `git push && git push origin v<version>`
 
 Pushing a `v*` tag triggers both release workflows automatically.
 
