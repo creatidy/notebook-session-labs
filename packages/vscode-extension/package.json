@@ -2,7 +2,7 @@
   "name": "notebook-session-labs",
   "displayName": "Notebook Session Labs",
   "description": "Connect AI assistants (Claude, GPT, etc.) to your Jupyter notebooks in VS Code. Let AI read, edit, and execute your notebook cells in real time through a secure local bridge.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "license": "MIT",
   "publisher": "creatidy",
