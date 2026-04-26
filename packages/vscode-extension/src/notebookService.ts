@@ -933,15 +933,24 @@ export async function executeCell(
   const startTime = Date.now();
   const previousExecutionOrder = cell.executionSummary?.executionOrder;
 
-  log.info({ cellIndex, notebookId: notebookId(doc) }, "Executing cell");
+    log.info({ cellIndex, notebookId: notebookId(doc) }, "Executing cell");
 
   try {
-    // Use VS Code command to execute the cell
+    // Show the notebook and select the target cell to ensure it's the active editor.
+    await vscode.window.showNotebookDocument(doc, {
+      selections: [new vscode.NotebookRange(cellIndex, cellIndex + 1)],
+    });
+
+    // Give the editor time to activate and kernel time to connect on first use.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    // Dispatch cell execution. Uses { ranges, document } argument format.
+    // The command silently no-ops if no kernel is available.
     void vscode.commands.executeCommand(
       "notebook.cell.execute",
       {
-        notebookEditor: { notebookUri: doc.uri },
-        cell: cell.document.uri,
+        ranges: [{ start: cellIndex, end: cellIndex + 1 }],
+        document: doc.uri,
       },
     );
 
@@ -1156,24 +1165,30 @@ async function waitForCellCompletion(
       };
     }
 
-    // After grace period, check if kernel started the execution at all
+    // After grace period, check if kernel started the execution at all.
+    // NOTE: We only abort early if the event-driven API is available AND
+    // confirms no execution was observed. If the event API is not available,
+    // we rely on polling alone and wait the full timeout.
     if (!kernelCheckDone && Date.now() >= kernelCheckTime) {
       kernelCheckDone = true;
-      if (currentExecutionOrder === previousExecutionOrder) {
-        // Execution order hasn't changed — check event monitor for any activity
+      if (currentExecutionOrder === previousExecutionOrder && monitor.hasEventApi) {
+        // Execution order hasn't changed AND we have the event API.
+        // Check if the event monitor observed ANY execution start for this notebook.
         if (!monitor.hasKernelActivity(doc)) {
-          // No kernel activity detected — kernel likely not connected
-          return {
-            cellId: cellId(cell),
-            status: "failed",
-            executionCount: null,
-            outputs: [],
-            durationMs: Date.now() - startTime,
-            error: "Kernel not available or execution did not start. Ensure a notebook kernel is selected.",
-          };
+          // No execution activity detected via events — kernel likely not connected.
+          // But before giving up, try re-dispatching the command once more — the
+          // kernel may have just finished connecting.
+          log.info("No kernel activity detected, re-dispatching execution command");
+          void vscode.commands.executeCommand(
+            "notebook.cell.execute",
+            {
+              ranges: [{ start: cellIndex, end: cellIndex + 1 }],
+              document: doc.uri,
+            },
+          );
+          // Continue waiting — don't abort yet. If still no activity after
+          // another grace period, we'll time out naturally.
         }
-        // Kernel has been active before but this execution didn't start —
-        // keep waiting, the kernel may just be slow to reconnect
       }
     }
   }
