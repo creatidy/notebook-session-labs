@@ -1,63 +1,50 @@
-# Notebook Session Labs — VS Code Extension
+# Notebook Session Labs
 
-A local bridge for live notebook sessions inside VS Code. This extension exposes notebook operations through a secure HTTP bridge that MCP clients can connect to.
+**Let AI assistants read and interact with your Jupyter notebooks in VS Code.**
 
-## Installation
+Notebook Session Labs connects your AI assistant (like Claude, GPT, or any MCP-compatible tool) directly to your open Jupyter notebooks. Your AI can read cells, edit code, see outputs, and help you work with data — all in real time, inside VS Code.
 
-Install from the VS Code Marketplace (search for "Notebook Session Labs") or install the `.vsix` manually:
+## Who Is This For?
 
-```bash
-code --install-extension notebook-session-labs-0.1.0.vsix
-```
+- **Researchers** who want AI help analyzing data, fixing notebook errors, or documenting results
+- **Data scientists** who need an AI pair programmer that can actually see their notebook outputs
+- **Students** learning Python/data science who want guided help with their code
+- **Anyone** using Jupyter notebooks in VS Code who wants AI assistance that goes beyond chat
 
-## Usage
+## What Can the AI Do?
 
-1. Open a notebook (`.ipynb`) in VS Code
-2. The bridge starts automatically and shows the port in the status bar
-3. Configure your MCP client with the host and port values
-4. Token authentication is always enabled — no configuration needed. The token is auto-generated and shared via the port file.
+With this extension, your AI assistant can:
 
-## Commands
+- **Read** your notebook cells, outputs, and metadata
+- **Edit** cell contents, add new cells, reorder them
+- **Execute** cells and see the results (stdout, errors, data tables)
+- **Clean up** outputs, save notebooks
+- **Analyze** your data by seeing actual execution results
 
-| Command | Description |
-|---------|-------------|
-| `Notebook Session Labs: Start Bridge` | Start the bridge server manually |
-| `Notebook Session Labs: Stop Bridge` | Stop the bridge server |
-| `Notebook Session Labs: Show Bridge Status` | Display current bridge status |
+## Requirements
 
-## Configuration
+Before you start, you need:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `notebookSessionLabs.bridge.enabled` | `true` | Enable the bridge server |
-| `notebookSessionLabs.bridge.host` | `127.0.0.1` | Bridge host address |
-| `notebookSessionLabs.bridge.port` | `0` | Bridge port (0 = ephemeral) |
-| `notebookSessionLabs.bridge.autoStart` | `true` | Auto-start when a notebook opens |
-| `notebookSessionLabs.bridge.authMode` | `"token"` | Token auth is always enforced (setting is for backward compatibility) |
-| `notebookSessionLabs.logging.level` | `info` | Log level |
-| `notebookSessionLabs.output.maxSize` | `100000` | Max output size per cell (bytes) |
-| `notebookSessionLabs.output.includeImages` | `true` | Include image outputs |
+1. **VS Code** (version 1.90 or later) — [Download](https://code.visualstudio.com/)
+2. **Docker Desktop** — [Download](https://www.docker.com/products/docker-desktop/) (used to run the MCP server securely)
 
-## Port Discovery
+That's it. No Python packages, no manual configuration files.
 
-When the bridge starts, it writes connection info to a **port file** so MCP clients (including Docker containers) can auto-discover the ephemeral port without manual configuration.
+## Installation — Quick Start
 
-**Port file location:**
+### Step 1: Install the Extension
 
-| Platform | Path |
-|----------|------|
-| Linux | `/tmp/notebook-session-labs/bridge-<pid>.json` |
-| Windows / macOS | `~/.notebook-session-labs/bridge-<pid>.json` |
-| Custom | Set `NSL_STATE_DIR` environment variable |
+Search for **"Notebook Session Labs"** in the VS Code Extensions marketplace, or install from the [marketplace page](https://marketplace.visualstudio.com/items?itemName=creatidy.notebook-session-labs).
 
-Each VS Code window writes its own PID-scoped file, so multiple sessions coexist. Stale files from crashed sessions are cleaned up automatically.
+### Step 2: Open a Notebook
 
-## MCP Client Configuration
+Open any `.ipynb` file in VS Code. The extension starts automatically — you'll see a notification with the bridge status.
 
-### Docker (Linux)
+### Step 3: Configure Your AI Client
 
-Mount the port file directory and the MCP server auto-discovers the port and token:
+Add this block to your MCP client configuration (the location depends on your AI tool — see below):
 
+**Linux:**
 ```json
 {
   "servers": {
@@ -77,8 +64,7 @@ Mount the port file directory and the MCP server auto-discovers the port and tok
 }
 ```
 
-### Docker (Windows / macOS)
-
+**macOS:**
 ```json
 {
   "servers": {
@@ -89,7 +75,7 @@ Mount the port file directory and the MCP server auto-discovers the port and tok
       "command": "docker",
       "args": [
         "run", "-i", "--rm", "--network=host",
-        "-v", "~/.notebook-session-labs:/tmp/notebook-session-labs",
+        "-v", "/tmp/notebook-session-labs:/tmp/notebook-session-labs",
         "-e", "NSL_BRIDGE_HOST=host.docker.internal",
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
       ]
@@ -98,37 +84,19 @@ Mount the port file directory and the MCP server auto-discovers the port and tok
 }
 ```
 
-### From Source (Development Only)
-
-If you built from source and want to run the MCP server directly without Docker:
-
+**Windows:**
 ```json
 {
   "servers": {
     "notebook-session-labs": {
-      "command": "node",
-      "args": ["/absolute/path/to/notebook-session-labs/packages/mcp-server/dist/index.js"],
-      "env": {
-        "NSL_BRIDGE_HOST": "127.0.0.1"
-      }
-    }
-  }
-}
-```
-
-### Docker — explicit port
-
-If you use a fixed port (`notebookSessionLabs.bridge.port` in settings):
-
-```json
-{
-  "servers": {
-    "notebook-session-labs": {
+      "disabled": false,
+      "timeout": 60,
+      "type": "stdio",
       "command": "docker",
       "args": [
         "run", "-i", "--rm", "--network=host",
+        "-v", "%TEMP%\\notebook-session-labs:/tmp/notebook-session-labs",
         "-e", "NSL_BRIDGE_HOST=host.docker.internal",
-        "-e", "NSL_BRIDGE_PORT=3838",
         "ghcr.io/creatidy/notebook-session-labs-mcp:latest"
       ]
     }
@@ -136,21 +104,80 @@ If you use a fixed port (`notebookSessionLabs.bridge.port` in settings):
 }
 ```
 
-See [llms-installation.md](../../llms-installation.md) for full configuration options. Token auth is always enabled.
+#### Where to Put the Configuration
 
-## Architecture
+| AI Client | Config Location |
+|---|---|
+| **Claude Code** (CLI) | `.mcp.json` in your project root |
+| **Cline** (VS Code extension) | VS Code Settings → Cline → MCP Servers |
+| **Cursor** | Settings → MCP → Add new server |
+| **Windsurf** | Settings → MCP Servers |
+| **Other MCP clients** | Check your client's documentation for MCP server configuration |
+
+That's it — restart your AI client and it will be able to interact with your notebooks.
+
+## How It Works
 
 ```
-MCP Client <--stdio--> MCP Server <--HTTP--> VS Code Extension Bridge <--API--> Notebook
+Your AI Assistant ←→ MCP Server (Docker) ←→ VS Code Extension ←→ Your Notebook
 ```
 
-The extension is the source of truth for notebook access. It uses loopback-only binding with always-on token authentication.
+1. This VS Code extension creates a secure local bridge when you open a notebook
+2. The MCP server (running in Docker) connects to this bridge
+3. Your AI assistant sends commands through the MCP server
+4. The bridge between the extension and the MCP server stays on your machine
 
-See the [root README](../../README.md) and [architecture docs](../../docs/architecture.md) for details.
+## Security
+
+Your notebooks stay safe:
+
+- **Local only** -- the bridge binds to `127.0.0.1` (your machine only, never the internet)
+- **Token authentication** -- an auto-generated 256-bit token protects every request
+- **No telemetry** -- this extension does not send any data externally (your AI client may use cloud APIs separately)
+- **Docker isolation** -- the MCP server runs in a container
+
+## Troubleshooting
+
+### "Bridge not available" error
+Make sure you have a notebook (`.ipynb`) open in VS Code. The bridge starts automatically when a notebook is opened.
+
+### "Docker" not found
+Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) and make sure it's running.
+
+### AI can't execute cells
+The first time you use a notebook, you may need to **run one cell manually** (click the Run button in VS Code) to initialize the kernel. After that, the AI can execute cells.
+
+### Bridge status shows wrong port
+Use the command **"Notebook Session Labs: Show Bridge Status"** from the VS Code Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`) to check the current status.
+
+## Commands
+
+| Command | What It Does |
+|---|---|
+| **Notebook Session Labs: Start Bridge** | Start the bridge manually |
+| **Notebook Session Labs: Stop Bridge** | Stop the bridge |
+| **Notebook Session Labs: Show Bridge Status** | Show current port and connection info |
+
+## Settings
+
+All settings are optional — defaults work for most users.
+
+| Setting | Default | Description |
+|---|---|---|
+| `notebookSessionLabs.bridge.autoStart` | `true` | Auto-start when a notebook opens |
+| `notebookSessionLabs.bridge.enabled` | `true` | Enable/disable the bridge |
+| `notebookSessionLabs.output.maxSize` | `100000` | Max output size per cell (bytes) |
+| `notebookSessionLabs.output.includeImages` | `true` | Include image outputs |
+| `notebookSessionLabs.logging.level` | `"info"` | Log level (`debug`, `info`, `warn`, `error`) |
+
+## Advanced Configuration
+
+For advanced options (custom ports, fixed port configuration, running from source, token configuration), see the [GitHub repository](https://github.com/creatidy/notebook-session-labs).
 
 ## Requirements
 
 - VS Code 1.90.0 or later
+- Docker Desktop (for the MCP server)
 
 ## License
 

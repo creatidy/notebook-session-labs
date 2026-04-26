@@ -1,7 +1,7 @@
 {
   "name": "notebook-session-labs",
   "displayName": "Notebook Session Labs",
-  "description": "A local bridge for live notebook sessions inside VS Code. Exposes notebook operations through a loopback HTTP bridge with auto-discovered ephemeral port — works with MCP clients and Docker containers.",
+  "description": "Connect AI assistants (Claude, GPT, etc.) to your Jupyter notebooks in VS Code. Let AI read, edit, and execute your notebook cells in real time through a secure local bridge.",
   "version": "0.2.0",
   "type": "module",
   "license": "MIT",
@@ -17,9 +17,15 @@
   ],
   "keywords": [
     "notebook",
+    "jupyter",
     "mcp",
-    "bridge",
-    "ai"
+    "ai",
+    "claude",
+    "cline",
+    "cursor",
+    "data science",
+    "machine learning",
+    "bridge"
   ],
   "repository": {
     "type": "git",
