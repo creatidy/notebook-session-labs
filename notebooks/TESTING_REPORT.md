@@ -110,11 +110,11 @@
 - **Impact:** Tests 1.1 and 1.8 fail. All other tools work when `notebookId` is provided explicitly.
 - **Root cause:** The VS Code extension likely tracks "active" notebook differently from "open" notebooks. The notebook may need to be focused/selected in the editor.
 
-### Issue: `get_jupyter_logs` not available in running server
-- **Status:** Confirmed in this run (new test)
-- **Behavior:** `get_jupyter_logs` returns "Method not found" — the tool is declared in the MCP schema and source code (`packages/mcp-server/src/index.ts`) but the running MCP server Docker image does not expose it.
+### Issue: `get_jupyter_logs` not available in MCP client
+- **Status:** Confirmed in this run (new test) — 🔧 Code implemented, ⏳ Awaiting live verification
+- **Behavior:** `get_jupyter_logs` returns "Method not found" when called through the MCP client.
 - **Impact:** Tests 10.1 fails, 10.2 and 10.3 are skipped.
-- **Root cause:** The running MCP server Docker image (v0.4.0) likely predates the `get_jupyter_logs` implementation. A rebuild/redeploy is needed.
+- **Root cause:** The `get_jupyter_logs` tool is defined in the source code (`packages/mcp-server/src/index.ts`) and is declared in the `tools/list` response of the v0.4.0 Docker image. However, investigation reveals VS Code connected to a stale container (`4e0c9215a515`) that lacks the compiled handler, while another container (`d432d1cf82f9`) has it registered. Multiple v0.4.0 containers were running simultaneously, and VS Code's MCP client connected to one without the runtime implementation. A full VS Code restart (not just reload) with only one `notebook-session-labs` container may resolve this.
 
 ### Issue: Prompts not invocable via MCP tool API
 - **Status:** Design limitation (unchanged)
