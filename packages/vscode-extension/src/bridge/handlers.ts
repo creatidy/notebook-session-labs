@@ -140,6 +140,9 @@ async function dispatch(
     case BRIDGE_METHODS.SAVE_NOTEBOOK:
       return handleSaveNotebook(params);
 
+    case BRIDGE_METHODS.GET_JUPYTER_LOGS:
+      return handleGetJupyterLogs(params);
+
     default:
       throw new Error(`Unhandled method: ${method}`);
   }
@@ -475,6 +478,15 @@ async function handleClearAllOutputs(params: Record<string, unknown>) {
     );
   }
   return notebookService.clearAllOutputs(doc);
+}
+
+// ── Jupyter Logs handler ──
+
+function handleGetJupyterLogs(params: Record<string, unknown>) {
+  const lines = (params.lines as number) ?? 100;
+  const level = params.level as "debug" | "info" | "warn" | "error" | undefined;
+  const filter = params.filter as string | undefined;
+  return notebookService.getJupyterLogs(lines, level, filter);
 }
 
 // ── Cell ID resolution (P6) ──

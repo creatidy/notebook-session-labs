@@ -414,6 +414,14 @@ server.tool("save_notebook", "Save the active or specified notebook", {
   return textResult(await bridge("SAVE_NOTEBOOK", { notebookId }));
 });
 
+server.tool("get_jupyter_logs", "Get Jupyter extension diagnostic logs from VS Code. Returns the last N lines (tail semantics) from the Jupyter output channel log file, optionally filtered by log level and/or regex pattern. Useful for diagnosing kernel connection issues, extension errors, and other Jupyter-related problems.", {
+  lines: z.number().int().positive().default(100).describe("Number of lines to return from the end (tail semantics)"),
+  level: z.enum(["debug", "info", "warn", "error"]).optional().describe("Filter by minimum log level (e.g., 'warn' shows warn + error)"),
+  filter: z.string().optional().describe("Regex pattern to filter log lines"),
+}, async ({ lines, level, filter }) => {
+  return textResult(await bridge("GET_JUPYTER_LOGS", { lines, level, filter }));
+});
+
 // ── Prompts ──
 
 server.prompt("notebook-cite", "Produce a reference to a notebook cell in a consistent format", {

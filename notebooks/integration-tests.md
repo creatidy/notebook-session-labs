@@ -30,8 +30,10 @@ You are the test runner. Execute each phase in order. For every test:
 | 6     | code     | `import time`, 60-second loop           |
 
 **Known issues to be aware of:**
-- **Issue 11:** `execute_cell` may fail if the kernel hasn't been initialized (run a cell manually first or accept as expected failure).
 - **Issue 12:** `run_all_cells` may time out at the MCP transport layer for long-running notebooks.
+
+**Resolved issues:**
+- **Issue 11 (FIXED):** `execute_cell` polling timeout — previously returned "Execution timed out while polling" even though cells executed. Now returns `status: "succeeded"` with full outputs inline.
 
 **Behavior notes:**
 - **`move_cell` index shift:** When `fromIndex < toIndex`, the actual landing index is `toIndex - 1` because the cell is first removed (shifting subsequent cells up) then inserted at the target position.
@@ -593,6 +595,127 @@ Call `delete_cell` with `{}` (no cell identifier).
 
 ---
 
+## Phase 10: New Features (v0.4.0+)
+
+These tests cover newly implemented features and improvements.
+
+### Test 10.1: `get_jupyter_logs` (basic)
+
+Call `get_jupyter_logs` with no parameters (default: last 100 lines).
+
+**Assert:**
+- Response is not an error.
+- Response contains `lines` (array of strings) or `content` (string).
+- Log lines contain Jupyter extension diagnostic information.
+
+### Test 10.2: `get_jupyter_logs` (with filters)
+
+Call `get_jupyter_logs` with:
+```json
+{
+  "lines": 10,
+  "level": "warn"
+}
+```
+
+**Assert:**
+- Response is not an error.
+- Response contains at most 10 lines.
+- Lines are filtered to warn level or above (warn, error).
+
+### Test 10.3: `get_jupyter_logs` (with regex filter)
+
+Call `get_jupyter_logs` with:
+```json
+{
+  "lines": 20,
+  "filter": "kernel"
+}
+```
+
+**Assert:**
+- Response is not an error.
+- Returned lines contain the word "kernel" (case-insensitive match expected).
+
+### Test 10.4: `execute_cell` inline output verification
+
+Call `execute_cell` with:
+```json
+{
+  "cellIndex": 1,
+  "waitForCompletion": true,
+  "timeoutMs": 30000
+}
+```
+
+**Assert:**
+- Response contains `outputs` array directly (not just status).
+- Each output has: `id`, `outputKind`, `items` (array with `mime`, `data`, `truncated`), `metadata`.
+- At least one output has `outputKind` = `"stream"`.
+- At least one output has `outputKind` = `"execute_result"`.
+- `error` field is `null` for successful execution.
+
+### Test 10.5: `execute_cell` error output with `originalError`
+
+Execute the error cell (index 4) and verify the error output structure.
+
+Call `execute_cell` with:
+```json
+{
+  "cellIndex": 4,
+  "waitForCompletion": true,
+  "timeoutMs": 15000
+}
+```
+
+**Assert:**
+- Response `status` = `"failed"`.
+- Response `error` is a non-null string containing `ZeroDivisionError`.
+- `outputs` array contains at least one entry with `outputKind` = `"error"`.
+- The error output's `metadata` contains `originalError` object with `ename`, `evalue`, and `traceback` fields.
+
+### Test 10.6: `execute_cell` by cellId with inline outputs
+
+Call `list_cells`, capture the `id` of cell at index 1. Call `execute_cell` with:
+```json
+{
+  "cellId": "<captured_id>",
+  "waitForCompletion": true,
+  "timeoutMs": 15000
+}
+```
+
+**Assert:**
+- Response `status` = `"succeeded"`.
+- Response `outputs` is a non-empty array with structured output items.
+- Response `cellId` matches the captured ID.
+
+### Test 10.7: `run_all_cells` dispatch verification
+
+Call `run_all_cells` with:
+```json
+{
+  "timeoutMs": 60000
+}
+```
+
+**Assert:**
+- Response contains `status` = `"dispatched"`, `dispatched` = `true`.
+- Response contains `codeCellIndices` (array of numbers, the indices of code cells).
+- Response `message` contains a description like "Execution dispatched for N code cell(s)".
+- After a brief wait, call `list_cells` and verify code cells have executed (non-null `executionCount`, `hasOutput` = `true` for at least some cells).
+
+### Test 10.8: `clear_cell_outputs` returns cell data
+
+Call `clear_cell_outputs` with `{ cellIndex: 1 }`.
+
+**Assert:**
+- Response contains full cell data: `index`, `id`, `kind`, `source`, `outputs` (empty array), `metadata`.
+- `executionCount` is `null` after clearing.
+- `executionStatus` is `"idle"`.
+
+---
+
 ## Phase 9: Final Restoration & Report
 
 ### Step 9.1: Restore notebook
@@ -663,6 +786,14 @@ Fill in the results table below.
 | 8.5 | Execute with waitForCompletion=false | `execute_cell` | ⬜ | |
 | 8.6 | list_cells for non-active notebook | `list_cells` | ⬜ | Skipped if single notebook |
 | 8.7 | delete_cell without identifier | `delete_cell` | ⬜ | |
+| 10.1 | get_jupyter_logs (basic) | `get_jupyter_logs` | ⬜ | |
+| 10.2 | get_jupyter_logs (with filters) | `get_jupyter_logs` | ⬜ | |
+| 10.3 | get_jupyter_logs (regex filter) | `get_jupyter_logs` | ⬜ | |
+| 10.4 | execute_cell inline output | `execute_cell` | ⬜ | |
+| 10.5 | execute_cell error originalError | `execute_cell` | ⬜ | |
+| 10.6 | execute_cell by ID inline output | `execute_cell`, `list_cells` | ⬜ | |
+| 10.7 | run_all_cells dispatch | `run_all_cells`, `list_cells` | ⬜ | |
+| 10.8 | clear_cell_outputs returns data | `clear_cell_outputs` | ⬜ | |
 | 9.1 | Final restoration check | `read_notebook` | ⬜ | |
 | 9.2 | Report generation | — | ⬜ | |
 
@@ -681,13 +812,16 @@ Failed:         __
 Expected fail:  __
 Skipped:        __
 
-Discovery tools (7):  __/7 passed
-Editing tools (7):    __/7 passed
-Execution tools (6):  __/6 passed
-Utility tools (3):    __/3 passed
-Prompts (3):          __/3 passed
-Cell-by-ID (7):       __/7 passed
-Edge cases (7):       __/7 passed
+Discovery (8):       __/8 passed
+Editing (7):         __/7 passed
+Restoration (3):     __/3 passed
+Execution (6):       __/6 passed
+Utility tools (3):   __/3 passed
+Prompts (3):         __/3 passed
+Cell-by-ID (7):      __/7 passed
+Edge cases (7):      __/7 passed
+New features (8):    __/8 passed
+Final (2):           __/2 passed
 
 Blocking issues for release: <list or "none">
 Non-blocking issues: <list or "none">

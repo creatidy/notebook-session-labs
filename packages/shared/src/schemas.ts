@@ -227,6 +227,14 @@ export const ClearAllOutputsParamsSchema = z.object({
   notebookId: NotebookIdSchema.optional(),
 });
 
+export const JupyterLogLevelSchema = z.enum(["debug", "info", "warn", "error"]);
+
+export const GetJupyterLogsParamsSchema = z.object({
+  lines: z.number().int().positive().default(100).describe("Number of lines to return from the end (tail semantics)"),
+  level: JupyterLogLevelSchema.optional().describe("Filter by log level"),
+  filter: z.string().optional().describe("Regex pattern to filter log lines"),
+});
+
 // ── Health check response ──
 
 export const HealthCheckResponseSchema = z.object({

@@ -99,6 +99,7 @@ export const BRIDGE_METHODS = {
   // Utility
   HEALTH_CHECK: "health_check",
   SAVE_NOTEBOOK: "save_notebook",
+  GET_JUPYTER_LOGS: "get_jupyter_logs",
 } as const;
 
 export type BridgeMethod = (typeof BRIDGE_METHODS)[keyof typeof BRIDGE_METHODS];

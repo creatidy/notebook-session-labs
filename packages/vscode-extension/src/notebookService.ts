@@ -7,6 +7,8 @@
  */
 import * as vscode from "vscode";
 import { createHash, randomBytes } from "crypto";
+import { readdirSync, readFileSync, statSync } from "fs";
+import { join } from "path";
 import { getLogger } from "./utils/logger.js";
 import type {
   NotebookSummary,
@@ -1142,6 +1144,173 @@ export async function saveNotebook(
 ): Promise<boolean> {
   log.info({ notebookId: notebookId(doc) }, "Saving notebook");
   return doc.save();
+}
+
+// ── Jupyter Extension Logs ──
+
+/** Jupyter log level type */
+type JupyterLogLevel = "debug" | "info" | "warn" | "error";
+
+/** Log level priority for filtering */
+const LOG_LEVEL_PRIORITY: Record<JupyterLogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+};
+
+/**
+ * Find the Jupyter extension output log file for the current VS Code session.
+ *
+ * VS Code persists output channel logs to:
+ *   <appLogsDir>/exthost<N>/output_logging_<timestamp>/NN-Jupyter.log
+ *
+ * We glob for the most recently modified match across all exthost directories.
+ */
+function findJupyterLogFile(): string | null {
+  const appLogsDir = (vscode.env as Record<string, unknown>).appLogsDir as string | undefined;
+  if (!appLogsDir) {
+    return null;
+  }
+
+  try {
+    // Scan exthost directories for Jupyter log files
+    const exthostEntries = readdirSync(appLogsDir);
+    let bestMatch: { path: string; mtimeMs: number } | null = null;
+
+    for (const entry of exthostEntries) {
+      if (!entry.startsWith("exthost")) continue;
+      const exthostDir = join(appLogsDir, entry);
+
+      let outputLoggingDir: string | null = null;
+      try {
+        const subEntries = readdirSync(exthostDir);
+        // Find the most recent output_logging directory
+        for (const subEntry of subEntries) {
+          if (subEntry.startsWith("output_logging")) {
+            outputLoggingDir = join(exthostDir, subEntry);
+          }
+        }
+      } catch {
+        continue;
+      }
+
+      if (!outputLoggingDir) continue;
+
+      try {
+        const logEntries = readdirSync(outputLoggingDir);
+        for (const logEntry of logEntries) {
+          // Match Jupyter log files (e.g., "6-Jupyter.log", "9-Jupyter.log")
+          if (logEntry.endsWith("-Jupyter.log") || logEntry.endsWith("-Jupyter Server Console.log")) {
+            const logPath = join(outputLoggingDir, logEntry);
+            try {
+              const stat = statSync(logPath);
+              if (!bestMatch || stat.mtimeMs > bestMatch.mtimeMs) {
+                bestMatch = { path: logPath, mtimeMs: stat.mtimeMs };
+              }
+            } catch {
+              // Skip unreadable files
+            }
+          }
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return bestMatch?.path ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get Jupyter extension diagnostic logs with tail semantics.
+ *
+ * Reads the Jupyter extension's output channel log file and returns
+ * the last N lines, optionally filtered by level and/or regex pattern.
+ *
+ * @param lines - Number of lines to return from the end (default 100)
+ * @param level - Optional minimum log level filter (e.g., "warn" shows warn + error)
+ * @param filter - Optional regex pattern to filter lines
+ */
+export function getJupyterLogs(
+  lines: number = 100,
+  level?: JupyterLogLevel,
+  filter?: string,
+): {
+  logPath: string | null;
+  totalLines: number;
+  returnedLines: number;
+  truncated: boolean;
+  lines: string[];
+} {
+  const logPath = findJupyterLogFile();
+
+  if (!logPath) {
+    return {
+      logPath: null,
+      totalLines: 0,
+      returnedLines: 0,
+      truncated: false,
+      lines: [],
+    };
+  }
+
+  try {
+    const content = readFileSync(logPath, "utf-8");
+    const allLines = content.split("\n");
+
+    // Filter out empty trailing lines
+    const nonEmptyLines = allLines.filter((l) => l.length > 0);
+    const totalLines = nonEmptyLines.length;
+
+    // Apply level filter
+    let filtered = nonEmptyLines;
+    if (level) {
+      const minPriority = LOG_LEVEL_PRIORITY[level];
+      filtered = filtered.filter((line) => {
+        // Match log level in format: HH:MM:SS.mmm [level] message
+        const levelMatch = line.match(/\[(debug|info|warn|error)\]/i);
+        if (!levelMatch) {
+          // Header lines (no level tag) — include only if level is "debug"
+          return minPriority <= LOG_LEVEL_PRIORITY.debug;
+        }
+        const lineLevel = levelMatch[1].toLowerCase() as JupyterLogLevel;
+        return LOG_LEVEL_PRIORITY[lineLevel] >= minPriority;
+      });
+    }
+
+    // Apply regex filter
+    if (filter) {
+      try {
+        const regex = new RegExp(filter, "i");
+        filtered = filtered.filter((line) => regex.test(line));
+      } catch {
+        // Invalid regex — skip filtering
+      }
+    }
+
+    // Apply tail (last N lines)
+    const tailLines = filtered.slice(-lines);
+    const truncated = filtered.length > lines;
+
+    return {
+      logPath,
+      totalLines,
+      returnedLines: tailLines.length,
+      truncated,
+      lines: tailLines,
+    };
+  } catch {
+    return {
+      logPath,
+      totalLines: 0,
+      returnedLines: 0,
+      truncated: false,
+      lines: [],
+    };
+  }
 }
 
 // ── Internal helpers ──
